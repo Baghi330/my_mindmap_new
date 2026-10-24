@@ -176,6 +176,12 @@ describe('عملیات درخت', () => {
 
     expect(reparentNode(tree, 'a-child', 'b').ok).toBe(true)
     expect(findNodeWithParent(tree, 'a-child').parent.id).toBe('b')
+
+    // منتقل کردن یک گره به فرزندش زنده — چرخه نباید ایجاد شود.
+    expect(reparentNode(tree, 'b', 'a').ok).toBe(true)
+    expect(findNodeWithParent(tree, 'b').parent.id).toBe('a')
+
+    // حالا a-child زیر b است که زیر a است؛ منتقل کردن a به a-child چرخه می‌سازد.
     expect(reparentNode(tree, 'a', 'a-child').ok).toBe(false)
     expect(reparentNode(tree, 'a', 'root').ok).toBe(true)
   })
@@ -236,7 +242,9 @@ describe('ادغام تدریجی گره‌ها', () => {
       { id: 'd', parentId: 'c', label: 'نوه' },
     ])
     expect(first.added).toEqual([])
-    expect(first.deferred).toHaveLength(1)
+    // c والدش را ندارد و d به c وابسته است؛ هر دو چون نمی‌توانند حل شوند
+    // در deferred برمی‌گردند تا در بسته بعدی دوباره بررسی شوند.
+    expect(first.deferred).toHaveLength(2)
 
     const second = mergeNodeEvents(tree, [
       ...first.deferred,

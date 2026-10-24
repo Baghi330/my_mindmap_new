@@ -169,6 +169,13 @@ export function normalizeTree(rawInput) {
       warnings.push('یک گره نامعتبر نادیده گرفته شد.')
       return null
     }
+    const hasRawId = typeof raw.id === 'string' && raw.id.trim().length > 0
+    const hasRawLabel = typeof raw.label === 'string' && raw.label.trim().length > 0
+    // یک گره بدون شناسه و عنوان معتبر، یک گره معنادار نیست.
+    if (!hasRawId && !hasRawLabel) {
+      warnings.push('گره‌ای بدون شناسه و عنوان معتبر نادیده گرفته شد.')
+      return null
+    }
     const id = makeUniqueId(raw.id)
     let label = cleanLabel(raw.label)
     if (!label) {
@@ -388,6 +395,8 @@ export function mergeNodeEvents(root, rawEvents) {
   while (pending.length > 0 && madeProgress) {
     madeProgress = false
     const nextPending = []
+    const deferred = []
+    const pendingIds = new Set(pending.map((event) => event.id))
     for (const event of pending) {
       if (event.invalid) {
         result.errors.push('یک رویداد نامعتبر نادیده گرفته شد.')
@@ -429,7 +438,15 @@ export function mergeNodeEvents(root, rawEvents) {
       }
       const parentEntry = index.get(event.parentId)
       if (!parentEntry) {
-        nextPending.push(event)
+        // والد هنوز موجود نیست. اگر یک رویداد دیگر در این بسته همان شناسه
+        // والد را داشته باشد، این رویداد به آن وابسته است و در دور بعدی بررسی
+        // می‌شود؛ در غیر این صورت همیشگی نمی‌توان آن را حل کرد و به
+        // deferred برمی‌گردد.
+        if (pendingIds.has(event.parentId)) {
+          nextPending.push(event)
+        } else {
+          deferred.push(event)
+        }
         continue
       }
       let label = cleanLabel(event.label)
@@ -446,8 +463,16 @@ export function mergeNodeEvents(root, rawEvents) {
       parent.children.push(node)
       parent.collapsed = false
       refreshIndexFrom(node)
+      pendingIds.add(event.id)
       result.added.push(event.id)
       madeProgress = true
+    }
+    if (!madeProgress) {
+      // هیچ پیشرفتی در این دور نشد؛ رویدادهای معلق یا به والدی اشاره
+      // می‌کنند که همیشه قابل حل نیست؛ به همین دلیل nextPending نیز
+      // به deferred اضافه می‌شوند.
+      result.deferred = deferred.concat(nextPending)
+      return result
     }
     pending = nextPending
   }

@@ -15,7 +15,7 @@ const props = defineProps({
 
 const store = useMindmapStore()
 const growthEngine = useGrowthEngine()
-const { dragState, beginDrag, setDragTarget, resetDrag } = useNodeDragState()
+const { dragState, beginDrag, setDragTarget, setMousePosition, resetDrag } = useNodeDragState()
 const { openContextMenu } = useContextMenu()
 
 const growthElement = ref(null)
@@ -106,6 +106,7 @@ function handlePointerDown(event) {
 
 function handlePointerMove(event) {
   if (!pointerSession) return
+  setMousePosition(event.clientX, event.clientY)
   const deltaX = event.clientX - pointerSession.x
   const deltaY = event.clientY - pointerSession.y
   if (!dragStarted && Math.hypot(deltaX, deltaY) < 7) return
