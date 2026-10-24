@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="ذهن‌نگار؛ مایندمپ تعاملی پژوهشی با نمایش تدریجی و طبیعی رشد درخت"
+    />
+    <meta name="theme-color" content="#f3f5fa" />
+    <title>ذهن‌نگار | مایندمپ پژوهشی</title>
+    <script>
+      try {
+        const settings = JSON.parse(localStorage.getItem('mindmap-ai:settings:v1') || '{}')
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        const isDark = settings.theme === 'dark' || (settings.theme !== 'light' && systemDark)
+        document.documentElement.dataset.preloadTheme = isDark ? 'dark' : 'light'
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute('content', isDark ? '#0b0f16' : '#f3f5fa')
+      } catch {
+        // تنظیم تم اختیاری است؛ در نبود آن تم روشن استفاده می‌شود.
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-BQgp9wrx.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BqEShV-w.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>
