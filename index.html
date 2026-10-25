@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
-      content="ذهن‌نگار؛ مایندمپ تعاملی پژوهشی با نمایش تدریجی و طبیعی رشد درخت"
+      content="مایندمپ تعاملی با نمایش تدریجی و طبیعی رشد درخت از داده پروژه"
     />
     <meta name="theme-color" content="#f3f5fa" />
-    <title>ذهن‌نگار | مایندمپ پژوهشی</title>
+    <title>مایندمپ</title>
     <script>
       try {
         const settings = JSON.parse(localStorage.getItem('mindmap-ai:settings:v1') || '{}')
@@ -24,6 +24,11 @@
     </script>
   </head>
   <body>
+    <script>
+  const make = (id, label, children = []) => ({ id, label, note: '', collapsed: false, children });
+  const topics = ['پژوهش','داده','تحلیل','هوش مصنوعی','همکاری','انتشار','امنیت','زیرساخت'];
+  window.__MINDMAP_DATA__ = make('root','نقشه پروژه میزبان', topics.map((t,i)=>make(`n${i}`,t,Array.from({length:4},(_,j)=>make(`n${i}-${j}`,`${t} ${j+1}`,Array.from({length:3},(_,k)=>make(`n${i}-${j}-${k}`,`جزئیات ${k+1}`)))))));
+</script>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

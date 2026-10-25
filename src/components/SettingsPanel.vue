@@ -188,13 +188,7 @@ async function clearMap() {
   if (confirmed) store.clearMap()
 }
 
-async function generate(mode) {
-  if (store.isStreaming.value) {
-    toast.info('ابتدا تولید فعلی را متوقف یا کامل کنید.')
-    return
-  }
-  await store.startGeneration(mode)
-}
+
 
 function saveNow() {
   const saved = store.saveDocumentNow(true)
@@ -406,26 +400,8 @@ function saveNow() {
                 </div>
               </div>
               <div class="panel-field">
-                <span class="field-label">تولید داده آزمایشی</span>
+                <span class="field-label">مدیریت نقشه</span>
                 <div class="button-column">
-                  <button
-                    type="button"
-                    class="btn btn-soft"
-                    :disabled="store.isStreaming.value"
-                    @click="generate('incremental')"
-                  >
-                    <UiIcon name="sparkles" :size="15" />
-                    شبیه‌سازی دریافت تدریجی
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline"
-                    :disabled="store.isStreaming.value"
-                    @click="generate('full')"
-                  >
-                    <UiIcon name="branch" :size="15" />
-                    دریافت یک‌بارهٔ درخت کامل
-                  </button>
                   <button type="button" class="btn btn-danger" @click="clearMap">
                     <UiIcon name="trash" :size="15" />
                     پاک‌کردن نقشه

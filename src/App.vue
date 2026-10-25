@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMindmapStore } from './composables/useMindmapStore.js'
 import { useGrowthEngine } from './composables/useGrowthEngine.js'
 import { useViewport } from './composables/useViewport.js'
@@ -14,6 +14,15 @@ import GrowthBar from './components/GrowthBar.vue'
 import MindmapCanvas from './components/MindmapCanvas.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ToastStack from './components/ToastStack.vue'
+
+const props = defineProps({
+  /** داده پروژه؛ با هر تغییر به‌صورت تدریجی نمایش داده می‌شود */
+  data: { type: Object, default: null },
+  /** فقط نمایش: ویرایش، درگ و منوی درخت غیرفعال می‌شود */
+  readonly: { type: Boolean, default: false },
+})
+
+const isReadonly = computed(() => props.readonly)
 
 const store = useMindmapStore()
 const growthEngine = useGrowthEngine()
@@ -245,6 +254,17 @@ function handleGlobalKeydown(event) {
 
 
 
+/**
+ * داده پراپ: هر بار که داده‌ای برسد، از ریشه به‌صورت استریمی نمایش داده می‌شود.
+ * immediate لازم است چون داده ممکن است پیش از اتصال واچ داده شده باشد.
+ */
+function loadProjectData(data) {
+  if (!data || typeof data !== 'object') return
+  store.loadExternalData(data, { gradual: true, mode: 'incremental' })
+}
+
+watch(() => props.data, (next) => loadProjectData(next), { immediate: true })
+
 onMounted(() => {
   syncHeaderHeight()
   if (typeof ResizeObserver !== 'undefined') {
@@ -271,13 +291,13 @@ onBeforeUnmount(() => {
     <AppHeader ref="headerRef" />
 
     <main class="app-stage">
-      <MindmapCanvas />
-      <EmptyHint />
+      <MindmapCanvas :readonly="isReadonly" />
+      <EmptyHint v-if="!isReadonly" />
     </main>
 
     <GrowthBar />
-    <SettingsPanel />
-    <ContextMenu />
+    <SettingsPanel v-if="!isReadonly" />
+    <ContextMenu v-if="!isReadonly" />
     <ToastStack />
     <ConfirmDialog />
   </div>

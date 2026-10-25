@@ -31,7 +31,7 @@ import { createHistoryStore } from '../core/history.js'
 import { createNodeMeasurer } from '../core/measure.js'
 import { layoutMindmap } from '../core/layout.js'
 import { getTheme } from '../theme/palettes.js'
-import { blankMindmap, sampleMindmap } from '../data/sampleMindmap.js'
+import { blankMindmap } from '../data/sampleMindmap.js'
 import { StreamAbortedError, streamSampleMindmap } from '../services/mindmapStream.js'
 import { normalizePersianText, toPersianDigits } from '../utils/text.js'
 import { useGrowthEngine } from './useGrowthEngine.js'
@@ -113,14 +113,15 @@ function createStore() {
   const storedPreferences = readStoredPreferences()
 
   const preferences = reactive({ ...storedPreferences })
-  const tree = ref(storedDocument?.tree ?? cloneTree(sampleMindmap))
+  // بدون دادهٔ تستی: تا وقتی داده‌ای از پراپ یا ذخیره‌سازی نیاید، فقط ریشه خالی است.
+  const tree = ref(storedDocument?.tree ?? cloneTree(blankMindmap))
   const treeRevision = ref(0)
   const selectedId = ref(tree.value.id)
   const editingId = ref(null)
   const activePanel = ref(null)
   const savedAt = ref(storedDocument?.savedAt || null)
   const saveErrorNotified = ref(false)
-  const instantSyncToken = ref(storedDocument ? 1 : 0)
+  const instantSyncToken = ref(1)
 
   const mediaState = reactive({
     prefersDark: false,
@@ -702,15 +703,7 @@ function createStore() {
     }
   }
 
-  async function startGeneration(mode = 'incremental') {
-    if (isStreaming.value) {
-      toast.info('یک تولید در حال اجراست؛ ابتدا آن را متوقف یا کامل کنید.')
-      return
-    }
-    const normalizedMode = mode === 'full' ? 'full' : 'incremental'
-    const base = cloneTree(sampleMindmap)
-    await streamTreeSource(base, normalizedMode, 'تولید مایندمپ', true)
-  }
+
 
   /**
    * بارگذاری داده بیرونی (مثلاً از پراپ پکیج) و نمایش تدریجی آن.
@@ -773,7 +766,7 @@ function createStore() {
     }
   }
 
-  /** هسته مشترک استریم تدریجی؛ توسط startGeneration و loadExternalData استفاده می‌شود. */
+  /** هسته مشترک استریم تدریجی؛ توسط loadExternalData و پخش دوباره استفاده می‌شود. */
   async function streamTreeSource(base, normalizedMode, historyLabel, announce = true, baseDelay) {
     streamSnapshot = cloneTree(toRaw(tree.value))
     historySuspended.value = true
@@ -877,6 +870,18 @@ function createStore() {
 
   function replayAnimation() {
     return growthEngine.replay()
+  }
+
+  /** بازپخش تدریجی داده فعلی، بدون جایگزین‌کردن آن با داده نمونه */
+  async function replayCurrentData() {
+    if (isStreaming.value) {
+      toast.info('ابتدا تولید فعلی را متوقف یا کامل کنید.')
+      return false
+    }
+    const currentTree = cloneTree(toRaw(tree.value))
+    if (countNodes(currentTree) <= 1) return replayAnimation()
+    await streamTreeSource(currentTree, 'incremental', 'پخش دوباره', false)
+    return true
   }
 
   function replayBranch(nodeId = selectedId.value) {
@@ -1036,13 +1041,13 @@ function createStore() {
     streamStatus,
     streamReceived,
     streamWarnings,
-    startGeneration,
     stopGeneration,
     loadExternalData,
     clearMap,
     startBlankMap,
     // انیمیشن
     replayAnimation,
+    replayCurrentData,
     replayBranch,
     skipAnimation,
     // تنظیمات

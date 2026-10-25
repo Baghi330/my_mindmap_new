@@ -7,7 +7,7 @@ import {
   streamSampleMindmap,
 } from '../src/services/mindmapStream.js'
 import { countNodes } from '../src/core/tree.js'
-import { sampleMindmap } from '../src/data/sampleMindmap.js'
+import { sampleMindmap } from './sampleTree.js'
 
 async function collectChunks(tree, options) {
   const chunks = []

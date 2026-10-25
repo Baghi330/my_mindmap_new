@@ -29,25 +29,17 @@ const isVisible = computed(
         </span>
         <div>
           <strong>از یک موضوع شروع کنید</strong>
-          <p>یک نمونهٔ آماده را ببینید یا عنوان گره مرکزی را ویرایش کنید.</p>
+          <p>عنوان گره مرکزی را ویرایش کنید یا با Tab فرزند بسازید.</p>
         </div>
       </div>
       <div class="empty-actions">
         <button
           type="button"
           class="btn btn-primary btn-sm"
-          @click="store.startGeneration('incremental')"
+          @click="store.startEditing(store.tree.value.id)"
         >
-          <UiIcon name="sparkles" :size="14" />
-          شبیه‌سازی دریافت تدریجی
-        </button>
-        <button
-          type="button"
-          class="btn btn-outline btn-sm"
-          @click="store.startGeneration('full')"
-        >
-          <UiIcon name="branch" :size="14" />
-          نمونهٔ کامل
+          <UiIcon name="pencil" :size="14" />
+          نام‌گذاری گره مرکزی
         </button>
       </div>
       <div class="empty-foot">

@@ -6,7 +6,7 @@ import {
   layoutMindmap,
 } from '../src/core/layout.js'
 import { countNodes, walkTree } from '../src/core/tree.js'
-import { sampleMindmap } from '../src/data/sampleMindmap.js'
+import { sampleMindmap } from './sampleTree.js'
 import {
   buildRandomTree,
   countVisibleNodes,

@@ -1,5 +1,168 @@
+<script setup>
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
+import { useMindmapStore } from "../composables/useMindmapStore.js";
+import { useToast } from "../composables/useToast.js";
+import {
+  exportMindmapJson,
+  exportMindmapPng,
+  exportMindmapSvg,
+  printMindmap,
+} from "../services/exporters.js";
+import { toPersianDigits } from "../utils/text.js";
+import UiIcon from "./UiIcon.vue";
+
+const toast = useToast();
+const store = useMindmapStore();
+
+const props = defineProps({ data: { type: Object, default: null } });
+
+/** بارگذاری تدریجی داده پراپ در صورت وجود */
+async function loadPropData() {
+  if (!props.data) return false;
+  if (store.isStreaming.value) {
+    store.stopGeneration();
+    return true;
+  }
+  await store.loadExternalData(props.data, {
+    gradual: true,
+    mode: "incremental",
+    baseDelay: 0.25,
+  });
+  return true;
+}
+
+const headerRoot = ref(null);
+const searchInput = ref(null);
+const exportMenuOpen = ref(false);
+const exportBusy = ref("");
+
+const hasSearch = computed(() => store.searchQuery.value.trim().length > 0);
+const resultCount = computed(() => store.searchResults.value.length);
+const currentMatchNumber = computed(() => {
+  if (!hasSearch.value || resultCount.value === 0) return 0;
+  return Math.min(store.activeSearchIndex.value + 1, resultCount.value);
+});
+const isDark = computed(() => store.resolvedTheme.value === "dark");
+
+function closeMenus() {
+  exportMenuOpen.value = false;
+}
+
+function focusSearch() {
+  nextTick(() => {
+    searchInput.value?.focus({ preventScroll: true });
+    searchInput.value?.select();
+  });
+}
+
+function handleSearchInput(event) {
+  store.setSearchQuery(event.target.value);
+}
+
+function handleSearchKeydown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (resultCount.value > 0) store.focusActiveSearchResult();
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    store.navigateSearch(1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    store.navigateSearch(-1);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    store.clearSearch();
+    searchInput.value?.blur();
+  }
+}
+
+function toggleTheme() {
+  store.setThemeMode(isDark.value ? "light" : "dark");
+}
+
+/** پخش دوباره: داده پراپ از ریشه به‌صورت استریمی نمایش داده می‌شود */
+function handleReplay() {
+  if (store.isStreaming.value) {
+    store.stopGeneration();
+    return;
+  }
+  if (!loadPropData()) store.replayCurrentData();
+}
+
+watch(
+  () => props.data,
+  (next) => {
+    if (next) loadPropData();
+  },
+);
+
+async function exportMindmap(kind) {
+  closeMenus();
+  if (exportBusy.value) return;
+  exportBusy.value = kind;
+  const options = {
+    theme: store.theme.value,
+    title: store.rootLabel.value,
+    subtitle: "ذهن‌نگار • مایندمپ پژوهشی",
+  };
+  try {
+    await nextTick();
+    if (kind === "json") {
+      const fileName = exportMindmapJson(store.tree.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "svg") {
+      const fileName = await exportMindmapSvg(store.layout.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "png") {
+      const fileName = await exportMindmapPng(store.layout.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "print") {
+      await printMindmap(store.layout.value, options);
+      toast.info("پنجره چاپ آماده شد.");
+    }
+  } catch (error) {
+    toast.error(`خروجی ناموفق بود: ${error?.message || "خطای نامشخص"}`);
+  } finally {
+    exportBusy.value = "";
+  }
+}
+
+function handleDocumentPointerDown(event) {
+  if (!exportMenuOpen.value) return;
+  if (
+    event.target.closest?.(".menu") ||
+    event.target.closest?.("[data-menu-root]")
+  )
+    return;
+  closeMenus();
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === "Escape") closeMenus();
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+  document.addEventListener("keydown", handleDocumentKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
+  document.removeEventListener("keydown", handleDocumentKeydown);
+});
+
+defineExpose({ focusSearch });
+</script>
+
 <template>
-  <header class="app-header">
+  <header ref="headerRoot" class="app-header">
     <div class="header-search">
       <div class="search-field" :class="{ 'has-query': hasSearch }">
         <UiIcon class="search-icon" name="search" :size="16" />
@@ -73,16 +236,15 @@
         <button
           type="button"
           class="icon-btn"
-          :disabled="!store.canRedo.value"
-          :title="
-            store.canRedo.value
-              ? `تکرار: ${store.redoLabel.value}`
-              : 'تکراری وجود ندارد'
-          "
-          aria-label="تکرار"
-          @click="store.redo()"
+          :title="store.isStreaming.value ? 'توقف پخش' : 'پخش دوباره داده پراپ'"
+          :aria-label="store.isStreaming.value ? 'توقف پخش' : 'پخش دوباره'"
+          @click="handleReplay"
         >
-          <UiIcon name="redo" :size="17" />
+          <UiIcon
+            :name="store.isStreaming.value ? 'stop' : 'redo'"
+            :size="17"
+            :class="{ spin: store.isStreaming.value }"
+          />
         </button>
       </div>
 
@@ -172,125 +334,6 @@
   </header>
 </template>
 
-<script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useMindmapStore } from "../composables/useMindmapStore.js";
-import { useToast } from "../composables/useToast.js";
-import {
-  exportMindmapJson,
-  exportMindmapPng,
-  exportMindmapSvg,
-  printMindmap,
-} from "../services/exporters.js";
-import { toPersianDigits } from "../utils/text.js";
-import UiIcon from "./UiIcon.vue";
-
-const store = useMindmapStore();
-const toast = useToast();
-
-const searchInput = ref(null);
-const exportMenuOpen = ref(false);
-const exportBusy = ref("");
-
-const hasSearch = computed(() => store.searchQuery.value.trim().length > 0);
-const resultCount = computed(() => store.searchResults.value.length);
-const currentMatchNumber = computed(() => {
-  if (!hasSearch.value || resultCount.value === 0) return 0;
-  return Math.min(store.activeSearchIndex.value + 1, resultCount.value);
-});
-const isDark = computed(() => store.resolvedTheme.value === "dark");
-const anyMenuOpen = computed(() => exportMenuOpen.value);
-
-function closeMenus() {
-  exportMenuOpen.value = false;
-}
-
-function focusSearch() {
-  nextTick(() => {
-    searchInput.value?.focus({ preventScroll: true });
-    searchInput.value?.select();
-  });
-}
-
-function handleSearchInput(event) {
-  store.setSearchQuery(event.target.value);
-}
-
-function handleSearchKeydown(event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    if (resultCount.value > 0) store.focusActiveSearchResult();
-  } else if (event.key === "ArrowDown") {
-    event.preventDefault();
-    store.navigateSearch(1);
-  } else if (event.key === "ArrowUp") {
-    event.preventDefault();
-    store.navigateSearch(-1);
-  } else if (event.key === "Escape") {
-    event.preventDefault();
-    store.clearSearch();
-    searchInput.value?.blur();
-  }
-}
-
-function toggleTheme() {
-  store.setThemeMode(isDark.value ? "light" : "dark");
-}
-
-async function exportMindmap(kind) {
-  closeMenus();
-  if (exportBusy.value) return;
-  exportBusy.value = kind;
-  const options = {
-    theme: store.theme.value,
-    title: store.rootLabel.value,
-    subtitle: "ذهن‌نگار • مایندمپ پژوهشی",
-  };
-  try {
-    await nextTick();
-    if (kind === "json") {
-      exportMindmapJson(store.tree.value, options);
-    } else if (kind === "svg") {
-      await exportMindmapSvg(store.layout.value, options);
-    } else if (kind === "png") {
-      await exportMindmapPng(store.layout.value, options);
-    } else if (kind === "print") {
-      await printMindmap(store.layout.value, options);
-    }
-  } catch (error) {
-    toast.error(`خروجی ناموفق بود: ${error?.message || "خطای نامشخص"}`);
-  } finally {
-    exportBusy.value = "";
-  }
-}
-
-function handleDocumentPointerDown(event) {
-  if (!anyMenuOpen.value) return;
-  if (
-    event.target.closest?.(".menu") ||
-    event.target.closest?.("[data-menu-root]")
-  )
-    return;
-  closeMenus();
-}
-
-function handleDocumentKeydown(event) {
-  if (event.key === "Escape") closeMenus();
-}
-
-onMounted(() => {
-  document.addEventListener("pointerdown", handleDocumentPointerDown, true);
-  document.addEventListener("keydown", handleDocumentKeydown);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
-  document.removeEventListener("keydown", handleDocumentKeydown);
-});
-
-defineExpose({ focusSearch });
-</script>
-
 <style scoped>
 .app-header {
   position: relative;
@@ -304,6 +347,54 @@ defineExpose({ focusSearch });
   background: color-mix(in srgb, var(--app-bg) 78%, transparent);
   backdrop-filter: blur(20px);
   flex: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: right;
+  border-radius: 10px;
+  padding: 3px 4px;
+  flex: none;
+  transition: background-color 160ms ease;
+}
+
+.brand:hover {
+  background: var(--surface-hover);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  color: var(--accent-text);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent) 88%, #ffffff 12%),
+    var(--accent)
+  );
+  box-shadow: 0 8px 18px -10px var(--accent);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.brand-text strong {
+  font-size: 14.5px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.brand-text small {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-weight: 500;
 }
 
 .header-search {
@@ -410,6 +501,53 @@ defineExpose({ focusSearch });
   gap: 0;
 }
 
+.generate-group {
+  display: inline-flex;
+  align-items: stretch;
+  height: 36px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 16px -10px
+    color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.generate-main {
+  height: 36px;
+  border-radius: 0;
+  padding: 0 12px;
+  font-size: 12.5px;
+  box-shadow: none;
+  gap: 6px;
+}
+
+.generate-caret {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-inline-start: 1px solid color-mix(in srgb, #ffffff 24%, transparent);
+  transition: background-color 150ms ease;
+}
+
+.generate-caret:hover {
+  background: var(--accent-hover);
+}
+
+.generate-caret.is-open {
+  background: var(--accent-hover);
+}
+
+.generate-group.is-streaming {
+  box-shadow: none;
+}
+
+.generate-group.is-streaming .generate-caret {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-inline-start-color: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
 .menu-anchor {
   position: relative;
 }
@@ -419,6 +557,11 @@ defineExpose({ focusSearch });
   top: calc(100% + 9px);
   left: 0;
   min-width: 244px;
+}
+
+.generate-menu {
+  left: auto;
+  right: 0;
 }
 
 .export-menu {
@@ -439,6 +582,10 @@ defineExpose({ focusSearch });
 }
 
 @media (max-width: 920px) {
+  .brand-text small {
+    display: none;
+  }
+
   .header-divider {
     display: none;
   }
@@ -454,7 +601,11 @@ defineExpose({ focusSearch });
   }
 
   .brand {
-    display: none;
+    padding: 0;
+  }
+
+  .brand-text strong {
+    font-size: 13.5px;
   }
 
   .header-search {
@@ -476,6 +627,12 @@ defineExpose({ focusSearch });
     display: none;
   }
 
+  .generate-label {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .header-menu {
     position: fixed;
     top: calc(var(--header-height, 96px) + 6px);
@@ -484,6 +641,7 @@ defineExpose({ focusSearch });
     min-width: 0;
   }
 
+  .generate-menu,
   .export-menu {
     right: 10px;
     left: 10px;
@@ -491,6 +649,14 @@ defineExpose({ focusSearch });
 }
 
 @media (max-width: 480px) {
+  .generate-label {
+    display: none;
+  }
+
+  .generate-main {
+    padding: 0 10px;
+  }
+
   .header-actions {
     gap: 0;
   }
