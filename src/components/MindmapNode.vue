@@ -3,7 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useGrowthEngine } from '../composables/useGrowthEngine.js'
 import { useMindmapStore } from '../composables/useMindmapStore.js'
 import { useNodeDragState, useContextMenu } from '../composables/useInteraction.js'
-import { isDescendant } from '../core/tree.js'
+import { useViewport } from '../composables/useViewport.js'
+import {
+  resolveDropTarget,
+  shouldCommitTarget,
+  DROP_NONE,
+} from '../core/dragTarget.js'
 import { getBranchColor } from '../theme/palettes.js'
 import { toPersianDigits } from '../utils/text.js'
 import UiIcon from './UiIcon.vue'
@@ -11,12 +16,17 @@ import UiIcon from './UiIcon.vue'
 const props = defineProps({
   node: { type: Object, required: true },
   theme: { type: Object, required: true },
+  interactive: { type: Boolean, default: true },
 })
 
 const store = useMindmapStore()
 const growthEngine = useGrowthEngine()
-const { dragState, beginDrag, setDragTarget, setMousePosition, resetDrag } = useNodeDragState()
+const viewport = useViewport()
+const { dragState, beginDrag, setDragPreview, setMousePosition, resetDrag } =
+  useNodeDragState()
 const { openContextMenu } = useContextMenu()
+
+const DRAG_THRESHOLD = 5
 
 const growthElement = ref(null)
 const isHovered = ref(false)
@@ -24,6 +34,8 @@ let pointerSession = null
 let dragStarted = false
 let pointerMoveHandler = null
 let pointerUpHandler = null
+let pointerCancelHandler = null
+let frameRequested = false
 
 const isRoot = computed(() => props.node.depth === 0)
 const isSelected = computed(() => store.selectedId.value === props.node.id)
@@ -32,7 +44,17 @@ const isActiveMatch = computed(
   () => store.activeSearchResult.value?.id === props.node.id,
 )
 const isDragging = computed(() => dragState.draggingId === props.node.id)
-const isDropTarget = computed(() => dragState.targetId === props.node.id)
+const isDropTarget = computed(
+  () => Boolean(dragState.preview.valid) && dragState.targetId === props.node.id,
+)
+const isInvalidTarget = computed(
+  () => dragState.targetId === props.node.id && !dragState.preview.valid,
+)
+/** جهتی که گره پس از رهاکردن می‌گیرد (فقط انگیزه بصری) */
+const proposedSide = computed(() =>
+  dragState.targetId === props.node.id ? dragState.preview.side : null,
+)
+
 
 const branchColor = computed(() => getBranchColor(props.theme, props.node.branchIndex))
 
@@ -90,7 +112,8 @@ function handlePointerDown(event) {
   if (event.button !== 0) return
   event.stopPropagation()
   selectNode()
-  if (isRoot.value || event.pointerType !== 'mouse') return
+  if (!props.interactive) return
+  if (isRoot.value) return
   pointerSession = {
     x: event.clientX,
     y: event.clientY,
@@ -99,63 +122,102 @@ function handlePointerDown(event) {
   dragStarted = false
   pointerMoveHandler = handlePointerMove
   pointerUpHandler = handlePointerUp
+  pointerCancelHandler = handlePointerCancel
   window.addEventListener('pointermove', pointerMoveHandler)
   window.addEventListener('pointerup', pointerUpHandler)
-  window.addEventListener('pointercancel', pointerUpHandler)
+  window.addEventListener('pointercancel', pointerCancelHandler)
+  window.addEventListener('keydown', handleDragKeydown)
+}
+
+/** تبدیل مختصات صفحه به مختصات دنیای مایندمپ، هم‌سو با چیدمان */
+function screenToWorld(clientX, clientY) {
+  const canvas = document.querySelector('.mindmap-canvas')
+  const rect = canvas?.getBoundingClientRect()
+  if (!rect) return viewport.screenToWorld(clientX, clientY)
+  return viewport.screenToWorld(clientX - rect.left, clientY - rect.top)
+}
+
+/**
+ * در حالت «جای آزاد» شبح باید دقیقاً زیر نشانگر بماند، поэтому پیش‌نمایش
+ * ایندکس درج و سمت به‌روز شود؛ خود مقصد با shouldCommitTarget پایدار می‌ماند.
+ */
+function updatePreview(clientX, clientY) {
+  const world = screenToWorld(clientX, clientY)
+  setMousePosition(clientX, clientY, world)
+
+  const next = resolveDropTarget(store.tree.value, props.node.id, world, store.layout.value)
+  if (!shouldCommitTarget(dragState.preview, next)) return
+  setDragPreview(next)
 }
 
 function handlePointerMove(event) {
   if (!pointerSession) return
-  setMousePosition(event.clientX, event.clientY)
-  const deltaX = event.clientX - pointerSession.x
-  const deltaY = event.clientY - pointerSession.y
-  if (!dragStarted && Math.hypot(deltaX, deltaY) < 7) return
   if (!dragStarted) {
+    const deltaX = event.clientX - pointerSession.x
+    const deltaY = event.clientY - pointerSession.y
+    if (Math.hypot(deltaX, deltaY) < DRAG_THRESHOLD) return
     dragStarted = true
     beginDrag(props.node.id)
     document.body.classList.add('is-dragging-node')
   }
-  const targetElement = document
-    .elementFromPoint(event.clientX, event.clientY)
-    ?.closest?.('[data-node-id]')
-  const targetId = targetElement?.getAttribute('data-node-id') || null
-  if (
-    !targetId ||
-    targetId === props.node.id ||
-    isDescendant(store.tree.value, props.node.id, targetId)
-  ) {
-    setDragTarget(null)
-    return
-  }
-  setDragTarget(targetId)
+  // محاسبه پیش‌نمایش حداکثر یک‌ بار در هر فریم
+  pointerSession.lastX = event.clientX
+  pointerSession.lastY = event.clientY
+  if (frameRequested) return
+  frameRequested = true
+  requestAnimationFrame(() => {
+    frameRequested = false
+    if (!pointerSession) return
+    updatePreview(pointerSession.lastX, pointerSession.lastY)
+  })
 }
 
-function handlePointerUp() {
+function finishDrag(commit) {
   if (pointerMoveHandler) window.removeEventListener('pointermove', pointerMoveHandler)
   if (pointerUpHandler) {
     window.removeEventListener('pointerup', pointerUpHandler)
-    window.removeEventListener('pointercancel', pointerUpHandler)
+    window.removeEventListener('pointercancel', pointerCancelHandler)
   }
+  window.removeEventListener('keydown', handleDragKeydown)
   pointerMoveHandler = null
   pointerUpHandler = null
-  const targetId = dragState.targetId
-  if (dragStarted && targetId) {
-    store.moveNodeToParent(props.node.id, targetId)
+  pointerCancelHandler = null
+  const preview = dragState.preview
+  if (commit && dragStarted && preview && preview.valid && preview.kind !== DROP_NONE) {
+    store.applyDrop(props.node.id, preview)
   }
   dragStarted = false
   pointerSession = null
+  frameRequested = false
   resetDrag()
   document.body.classList.remove('is-dragging-node')
 }
 
+function handlePointerUp() {
+  finishDrag(true)
+}
+
+function handlePointerCancel() {
+  finishDrag(false)
+}
+
+function handleDragKeydown(event) {
+  if (event.key !== 'Escape') return
+  event.preventDefault()
+  event.stopPropagation()
+  finishDrag(false)
+}
+
 function handleDoubleClick(event) {
   event.stopPropagation()
+  if (!props.interactive) return
   store.startEditing(props.node.id)
 }
 
 function handleContextMenu(event) {
   event.preventDefault()
   event.stopPropagation()
+  if (!props.interactive) return
   selectNode()
   openContextMenu(props.node.id, event.clientX, event.clientY)
 }
@@ -171,15 +233,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   growthEngine.registerNodeElement(props.node.id, null)
-  if (pointerMoveHandler) window.removeEventListener('pointermove', pointerMoveHandler)
-  if (pointerUpHandler) {
-    window.removeEventListener('pointerup', pointerUpHandler)
-    window.removeEventListener('pointercancel', pointerUpHandler)
-  }
-  if (dragStarted) {
-    resetDrag()
-    document.body.classList.remove('is-dragging-node')
-  }
+  finishDrag(false)
 })
 </script>
 
@@ -191,6 +245,7 @@ onBeforeUnmount(() => {
       'is-selected': isSelected,
       'is-dragging': isDragging,
       'is-drop-target': isDropTarget,
+      'is-invalid-target': isInvalidTarget,
       'is-search-match': isSearchMatch,
     }"
     :data-node-id="node.id"
@@ -217,6 +272,20 @@ onBeforeUnmount(() => {
         :stroke="theme.accent"
         stroke-width="2"
         stroke-dasharray="5 4"
+      />
+      <rect
+        v-if="isInvalidTarget"
+        class="invalid-glow"
+        :x="-halfWidth - 6"
+        :y="-halfHeight - 6"
+        :width="node.width + 12"
+        :height="node.height + 12"
+        :rx="node.radius + 6"
+        fill="none"
+        :stroke="theme.danger"
+        stroke-width="1.6"
+        stroke-dasharray="3 3"
+        opacity="0.7"
       />
       <rect
         v-if="isSearchMatch"
@@ -336,6 +405,15 @@ onBeforeUnmount(() => {
           {{ node.collapsed ? toPersianDigits(node.hiddenCount) : '−' }}
         </text>
       </g>
+      <!-- جهت مقصد: فلش رو به سمت شاخه‌ای که گره در آن قرار می‌گیرد -->
+      <g v-if="proposedSide && isDropTarget" class="side-indicator">
+        <path
+          :d="proposedSide === 'left' ? '-A -A L 0 -A L -A 0 Z' : 'A -A L 0 -A L A 0 Z'"
+          :transform="`translate(${proposedSide === 'left' ? -halfWidth - 26 : halfWidth + 26} 0)`"
+          :fill="theme.accent"
+          opacity="0.9"
+        />
+      </g>
       <g v-if="isDropTarget" class="drop-label">
         <rect
           :x="-halfWidth"
@@ -354,7 +432,7 @@ onBeforeUnmount(() => {
           font-weight="600"
           :fill="theme.accentText"
         >
-          انتقال به این شاخه
+          {{ dragState.preview.kind === 'child' ? 'فرزند این گره' : 'درج در این جایگاه' }}
         </text>
       </g>
       <UiIcon
@@ -385,7 +463,12 @@ onBeforeUnmount(() => {
 }
 
 .mindmap-node.is-dragging .node-growth {
-  filter: opacity(0.55);
+  filter: opacity(0.38);
+  transition: opacity 120ms ease;
+}
+
+.mindmap-node.is-dragging .node-surface {
+  stroke-dasharray: 4 3;
 }
 
 .node-label {
@@ -423,6 +506,8 @@ onBeforeUnmount(() => {
   opacity: 0.75;
 }
 
+
+
 .selection-ring {
   pointer-events: none;
 }
@@ -431,8 +516,31 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.drop-glow {
+.drop-glow,
+.invalid-glow,
+.side-indicator {
   pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.side-indicator {
+  animation: side-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes side-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-indicator {
+    animation: none;
+  }
 }
 
 .collapse-toggle {
@@ -460,5 +568,14 @@ onBeforeUnmount(() => {
 
 .mindmap-node.is-drop-target .node-surface {
   stroke: var(--accent);
+  stroke-width: 1.8;
+}
+
+.mindmap-node.is-invalid-target {
+  cursor: no-drop;
+}
+
+.mindmap-node.is-invalid-target .node-surface {
+  stroke-dasharray: 3 3;
 }
 </style>

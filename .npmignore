@@ -1,0 +1,15 @@
+# کد منبع و ابزار توسعه
+src/
+tests/
+verify.mjs
+viewer-demo.html
+vite.config.js
+.agent-cache/
+.vscode/
+node_modules/
+screenshot.png
+
+# فایل‌های محیطی
+.env
+.env.*
+*.log

@@ -5,7 +5,7 @@ import { useMindmapStore } from '../composables/useMindmapStore.js'
 import { useViewport } from '../composables/useViewport.js'
 import { getBranchColor } from '../theme/palettes.js'
 import { toPersianDigits } from '../utils/text.js'
-import { useContextMenu } from '../composables/useInteraction.js'
+import { useContextMenu, useNodeDragState } from '../composables/useInteraction.js'
 import MindmapEdge from './MindmapEdge.vue'
 import MindmapNode from './MindmapNode.vue'
 import NodeEditor from './NodeEditor.vue'
@@ -15,6 +15,12 @@ const store = useMindmapStore()
 const growthEngine = useGrowthEngine()
 const viewport = useViewport()
 const { closeContextMenu } = useContextMenu()
+const { dragState } = useNodeDragState()
+
+const props = defineProps({
+  readonly: { type: Boolean, default: false },
+})
+const isInteractive = computed(() => !props.readonly)
 
 const canvasRoot = ref(null)
 const theme = computed(() => store.theme.value)
@@ -42,6 +48,104 @@ const gridStyle = computed(() => {
 })
 
 const zoomLabel = computed(() => `${toPersianDigits(Math.round(viewport.scale.value * 100))}٪`)
+
+const nodeToScreen = (x, y) => ({
+  x: viewport.translateX.value + x * viewport.scale.value,
+  y: viewport.translateY.value + y * viewport.scale.value,
+})
+
+/** والد فعلی گره در حال کشیدن — برای تشخیص «تغییر ساختار» */
+const currentParentId = computed(
+  () => layout.value.nodeMap.get(dragState.draggingId)?.parentId ?? null,
+)
+
+/**
+ * محل نهایی شبح: همان جایی که موتور چیدمان پس از رهاکردن گره را می‌گذارد.
+ * از هندسهٔ فرزندان فعلی والد مقصد و ایندکس درج محاسبه می‌شود تا
+ * پیش‌نمایش و نتیجه نهایی دقیقاً یکی باشند.
+ */
+function projectGhostWorld(preview, draggedSize) {
+  const parent = layout.value.nodeMap.get(preview.parentId)
+  if (!parent) return null
+  const sign = preview.side === 'left' ? -1 : 1
+  const gap = parent.depth === 0 ? 78 : 54
+  const x = parent.x + sign * (parent.width / 2 + gap + draggedSize.width / 2)
+
+  // فرزندان همان والد و همان سمت، به ترتیب چیدمان فعلی
+  const siblings = layout.value.nodes
+    .filter((node) => node.parentId === parent.id && node.side === parent.side)
+    .sort((a, b) => a.y - b.y)
+    .filter((node) => node.id !== dragState.draggingId)
+
+  const index = Math.max(0, Math.min(preview.index >= 0 ? preview.index : siblings.length, siblings.length))
+  if (siblings.length === 0) return { x, y: parent.y }
+
+  // اگر پیش از گره i درج شود، شبح بین i-1 و i قرار می‌گیرد
+  if (index === 0) {
+    return { x, y: siblings[0].y - siblings[0].height / 2 - 12 - draggedSize.height / 2 }
+  }
+  if (index >= siblings.length) {
+    const last = siblings[siblings.length - 1]
+    return { x, y: last.y + last.height / 2 + 12 + draggedSize.height / 2 }
+  }
+  const above = siblings[index - 1]
+  const below = siblings[index]
+  return { x, y: (above.y + above.height / 2 + (below.y - below.height / 2)) / 2 }
+}
+
+/** شبح در جایگاه ساختاریِ مقصد، نه زیر نشانگر */
+const dragGhost = computed(() => {
+  const id = dragState.draggingId
+  if (!id) return null
+  const node = layout.value.nodeMap.get(id)
+  if (!node) return null
+  const preview = dragState.preview
+  if (!preview || !preview.valid || preview.parentId == null) return null
+
+  const world = projectGhostWorld(preview, { width: node.width, height: node.height })
+  if (!world) return null
+
+  const scale = viewport.scale.value
+  const point = nodeToScreen(world.x, world.y)
+  return {
+    label: node.label,
+    side: preview.side,
+    style: {
+      transform: `translate(${point.x}px, ${point.y}px) translate(-50%, -50%) scale(${scale})`,
+      width: `${node.width}px`,
+      height: `${node.height}px`,
+      borderRadius: `${node.radius * scale}px`,
+      fontSize: `${node.fontSize * scale}px`,
+    },
+  }
+})
+
+/**
+ * خط اتصال پیش‌نمایش، در مختصات دنیا (داخل graph-layer که خودش
+ * transform شده رندر می‌شود) تا با زوم و پن هم‌گام بماند.
+ */
+const dragPreviewEdge = computed(() => {
+  const ghost = dragGhost.value
+  const preview = dragState.preview
+  if (!ghost || !preview?.parentId) return null
+  const parent = layout.value.nodeMap.get(preview.parentId)
+  const dragged = layout.value.nodeMap.get(dragState.draggingId)
+  if (!parent || !dragged) return null
+
+  const world = projectGhostWorld(preview, { width: dragged.width, height: dragged.height })
+  if (!world) return null
+
+  const sign = preview.side === 'left' ? -1 : 1
+  const startX = parent.x + sign * (parent.width / 2)
+  const startY = parent.y
+  const endX = world.x - sign * (dragged.width / 2)
+  const endY = world.y
+  const curve = Math.max(24, Math.abs(endX - startX) * 0.45)
+  return {
+    path: `M ${startX} ${startY} C ${startX + sign * curve} ${startY}, ${endX - sign * curve} ${endY}, ${endX} ${endY}`,
+    structural: preview.parentId !== currentParentId.value,
+  }
+})
 
 function fitInitialView() {
   if (hasFitted) return
@@ -170,8 +274,10 @@ function handleWheel(event) {
 
 function handlePointerDown(event) {
   closeContextMenu()
-  if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
   if (event.button === 2) return
+  // در حین کشیدن گره، بوم نباید هم‌زمان جابه‌جا شود
+  if (dragState.draggingId) return
+  if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
   const element = canvasRoot.value
   if (!element) return
   element.setPointerCapture?.(event.pointerId)
@@ -333,6 +439,21 @@ function runCanvasAction(action) {
           :key="node.id"
           :node="node"
           :theme="theme"
+          :interactive="isInteractive"
+        />
+        <!-- اتصال پیش‌نمایش: خط‌چین نازک اگر فقط جابه‌جایی بصری است،
+             و خطچین پر اگر ساختار (والد) هم عوض می‌شود -->
+        <path
+          v-if="dragPreviewEdge"
+          class="preview-edge"
+          :class="{ 'is-structural': dragPreviewEdge.structural }"
+          :d="dragPreviewEdge.path"
+          fill="none"
+          :stroke="theme.accent"
+          :stroke-width="dragPreviewEdge.structural ? 2.4 : 1.6"
+          :stroke-dasharray="dragPreviewEdge.structural ? '6 4' : '4 6'"
+          :opacity="dragPreviewEdge.structural ? 0.85 : 0.45"
+          stroke-linecap="round"
         />
       </g>
     </svg>
@@ -359,7 +480,17 @@ function runCanvasAction(action) {
       </button>
     </div>
 
-    <NodeEditor />
+    <div
+      v-if="dragGhost"
+      class="drag-ghost"
+      :class="`is-${dragGhost.side || 'right'}`"
+      :style="dragGhost.style"
+      aria-hidden="true"
+    >
+      {{ dragGhost.label }}
+    </div>
+
+    <NodeEditor v-if="isInteractive" />
   </div>
 </template>
 
@@ -392,6 +523,39 @@ function runCanvasAction(action) {
 
 .mindmap-canvas.is-panning {
   cursor: grabbing;
+}
+
+.drag-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 85%, #fff 15%);
+  box-shadow: 0 18px 38px -20px var(--accent);
+  opacity: 0.9;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 120ms ease;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drag-ghost {
+    transition: none;
+  }
+}
+
+.preview-edge {
+  pointer-events: none;
 }
 
 .mindmap-svg {

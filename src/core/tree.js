@@ -92,9 +92,17 @@ export function createNode(label = 'موضوع جدید', existingIds = new Set(
     label,
     note: options.note || '',
     collapsed: options.collapsed === true,
+    side: options.side === 'left' || options.side === 'right' ? options.side : null,
     children: [],
   }
 }
+
+/** جهت شاخه را عادی‌سازی می‌کند؛ null یعنی «خودکار» */
+export function normalizeSide(value) {
+  return value === 'left' || value === 'right' ? value : null
+}
+
+
 
 export function cloneTree(tree) {
   if (!tree) return null
@@ -198,6 +206,8 @@ export function normalizeTree(rawInput) {
       label,
       note: cleanNote(raw.note),
       collapsed: raw.collapsed === true,
+      // جهت شاخه اگر داده آمده باشد حفظ می‌شود تا چیدمان از آن پیروی کند
+      side: normalizeSide(raw.side),
       children,
     }
   }

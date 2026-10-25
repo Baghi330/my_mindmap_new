@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useMindmapStore } from '../composables/useMindmapStore.js'
-import { useToast } from '../composables/useToast.js'
 import { useContextMenu } from '../composables/useInteraction.js'
 import {
   countDescendants,
@@ -13,8 +12,12 @@ import { toPersianDigits } from '../utils/text.js'
 import UiIcon from './UiIcon.vue'
 
 const store = useMindmapStore()
-const toast = useToast()
 const { contextMenu, closeContextMenu } = useContextMenu()
+
+defineProps({
+  disableTeleport: { type: Boolean, default: false },
+  styleVars: { type: Object, default: null },
+})
 
 const node = computed(() =>
   contextMenu.value ? findNode(store.tree.value, contextMenu.value.nodeId) : null,
@@ -89,12 +92,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="disableTeleport">
     <Transition name="context-fade">
       <div
         v-if="contextMenu && node"
         class="context-menu menu"
-        :style="menuStyle"
+        :style="{ ...(styleVars || {}), ...menuStyle }"
         role="menu"
         aria-label="عملیات گره"
       >

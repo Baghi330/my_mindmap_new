@@ -13,6 +13,8 @@ const DEFAULT_OPTIONS = {
   direction: 'balanced',
 }
 
+
+
 function roundCoordinate(value) {
   return Math.round(value * 100) / 100
 }
@@ -94,9 +96,28 @@ export function layoutMindmap(root, options = {}) {
   } else if (settings.direction === 'ltr') {
     rightChildren.push(...rootChildren)
   } else {
+    // جهت صریح گره (که از محل رهاکردن کاربر می‌آید) بر قاعده «دوطرفه» اولویت
+    // دارد. فقط شاخه‌های بدون جهت با تعادل وزن بین دو سمت پخش می‌شوند؛ این
+    // باعث می‌شود گره‌ای که کاربر سمت چپ رها کرده، واقعاً چپ بماند.
     let leftWeight = 0
     let rightWeight = 0
+    const undecided = []
     for (const child of rootChildren) {
+      const nodeSide = child.node?.side
+      if (nodeSide === 'left') {
+        leftChildren.push(child)
+        leftWeight += child.weight
+      } else if (nodeSide === 'right') {
+        rightChildren.push(child)
+        rightWeight += child.weight
+      } else {
+        undecided.push(child)
+      }
+    }
+    // گره‌های بدون سمت صریح با تعادل وزن پخش می‌شوند تا چیدمان همیشه
+    // دوطرفه بماند. قبلاً اگر یک سمت خالی بود، همه به همان سمت می‌رفتند
+    // و مایندمپ یک‌طرفه می‌شد؛ این قاعده حذف شد.
+    for (const child of undecided) {
       if (leftWeight <= rightWeight) {
         leftChildren.push(child)
         leftWeight += child.weight
@@ -119,6 +140,10 @@ export function layoutMindmap(root, options = {}) {
     } else {
       meta.x = 0
     }
+
+    /* چیدمان خودکار مالک نهایی مختصات است. جابه‌جایی گره فقط ساختار
+       (والد + ایندکس + سمت) را عوض می‌کند، نه مختصات؛ پس هیچ گرهی
+       روی دیگری نمی‌افتد و مایندمپ همیشه خوانا می‌ماند. */
 
     const attributes = {
       id: meta.id,

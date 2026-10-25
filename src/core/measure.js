@@ -133,11 +133,23 @@ export function wrapLabel(label, maxWidth, measure, maxLines = 10) {
   return safeLines
 }
 
+function fallbackMeasureText(text) {
+  return Array.from(text ?? '').length * 8
+}
+
 function createCanvasMeasureText(fontFamily) {
-  const canvas = document.createElement('canvas')
-  const context = canvas.getContext('2d')
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return fallbackMeasureText
+  }
+  let canvas = null
+  try {
+    canvas = document.createElement('canvas')
+  } catch {
+    return fallbackMeasureText
+  }
+  const context = canvas.getContext?.('2d')
   if (!context) {
-    return (text) => Array.from(text).length * 8
+    return fallbackMeasureText
   }
   return (text, font) => {
     context.font = font

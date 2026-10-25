@@ -31,8 +31,17 @@ export function createViewport() {
   )
 
   const cancelAnimation = () => {
-    if (animationFrame) cancelAnimationFrame(animationFrame)
+    if (animationFrame && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(animationFrame)
+    }
     animationFrame = 0
+  }
+
+  const scheduleFrame = (callback) => {
+    if (typeof requestAnimationFrame === 'function') {
+      return requestAnimationFrame(callback)
+    }
+    return 0
   }
 
   const setViewportSize = (nextWidth, nextHeight) => {
@@ -79,8 +88,16 @@ export function createViewport() {
     const useAnimation =
       !options.instant &&
       typeof window !== 'undefined' &&
+      typeof requestAnimationFrame === 'function' &&
       !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (!useAnimation || duration <= 0) {
+      translateX.value = targetX
+      translateY.value = targetY
+      scale.value = endScale
+      clampTranslation()
+      return
+    }
+    if (typeof performance === 'undefined') {
       translateX.value = targetX
       translateY.value = targetY
       scale.value = endScale
@@ -95,13 +112,13 @@ export function createViewport() {
       translateY.value = startY + (targetY - startY) * eased
       scale.value = startScale + (endScale - startScale) * eased
       if (progress < 1) {
-        animationFrame = requestAnimationFrame(step)
+        animationFrame = scheduleFrame(step)
       } else {
         animationFrame = 0
         clampTranslation()
       }
     }
-    animationFrame = requestAnimationFrame(step)
+    animationFrame = scheduleFrame(step)
   }
 
   const fitView = (options = {}) => {

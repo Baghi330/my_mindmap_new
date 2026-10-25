@@ -154,6 +154,8 @@ function moveDown() {
   store.moveSibling(selectedNode.value.id, 1)
 }
 
+
+
 async function removeNode() {
   if (!selectedNode.value) return
   await store.requestDeleteNode(selectedNode.value.id)
@@ -196,8 +198,7 @@ async function generate(mode) {
 
 function saveNow() {
   const saved = store.saveDocumentNow(true)
-  if (saved) toast.success('نقشه در مرورگر ذخیره شد.')
-  else toast.error('ذخیره‌سازی ناموفق بود.')
+  if (!saved) toast.error('ذخیره‌سازی ناموفق بود.')
 }
 </script>
 
@@ -550,6 +551,7 @@ function saveNow() {
                     <UiIcon name="arrow-down" :size="16" />
                     <span>جابه‌جایی پایین</span>
                   </button>
+
                 </div>
                 <button
                   type="button"

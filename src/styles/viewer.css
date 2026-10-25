@@ -1,0 +1,201 @@
+/* استایل اسکوپ‌شده پکیج mindmap-ai — عمداً هیچ سلکتور سراسری (html/body/*)
+   روی هاست اثر نمی‌گذارد. همه قاعده‌ها زیر .mindmap-viewer هستند. */
+
+.mindmap-viewer,
+.mindmap-viewer *,
+.mindmap-viewer *::before,
+.mindmap-viewer *::after {
+  box-sizing: border-box;
+}
+
+.mindmap-viewer button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.mindmap-viewer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.mindmap-viewer svg {
+  display: block;
+}
+
+/* منو — نسخه اسکوپ‌شده همان کلاس‌های base.css دمو */
+.mindmap-viewer .menu {
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 20px 50px -18px var(--shadow);
+  z-index: 120;
+}
+
+.mindmap-viewer .menu-label {
+  padding: 7px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
+.mindmap-viewer .menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  transition:
+    background-color 130ms ease,
+    color 130ms ease;
+}
+
+.mindmap-viewer .menu-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.mindmap-viewer .menu-item.is-danger {
+  color: var(--danger);
+}
+
+.mindmap-viewer .menu-item.is-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.mindmap-viewer .menu-item .menu-hint {
+  margin-inline-start: auto;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  direction: ltr;
+}
+
+.mindmap-viewer .menu-separator {
+  height: 1px;
+  margin: 5px 7px;
+  background: var(--border);
+}
+
+/* نوار رشد و پیام‌ها داخل باکس ویور لنگر می‌شوند نه viewport */
+.mindmap-viewer .growth-bar {
+  position: absolute;
+}
+
+.mindmap-viewer .toast-stack {
+  position: absolute;
+  top: 12px;
+}
+
+.mindmap-viewer .toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 16px 36px -22px var(--shadow);
+  pointer-events: auto;
+}
+
+.mindmap-viewer .toast-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mindmap-viewer .toast.is-success .toast-icon {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.mindmap-viewer .toast.is-error .toast-icon {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.mindmap-viewer .toast.is-warning .toast-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.mindmap-viewer .toast-message {
+  flex: 1;
+  padding-top: 1px;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.mindmap-viewer .toast-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-faint);
+}
+
+.mindmap-viewer .kbd,
+.mindmap-viewer kbd {
+  font-family: inherit;
+  direction: ltr;
+}
+
+/* کارت و دکمه‌ها — نسخه اسکوپ‌شده برای دیالوگ تأیید پکیج */
+.mindmap-viewer .card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px -30px var(--shadow);
+}
+
+.mindmap-viewer .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 10px;
+  font-size: 12.8px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.mindmap-viewer .btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.mindmap-viewer .btn-outline {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.mindmap-viewer .btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
+}

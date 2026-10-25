@@ -120,7 +120,6 @@ function createStore() {
   const activePanel = ref(null)
   const savedAt = ref(storedDocument?.savedAt || null)
   const saveErrorNotified = ref(false)
-  const initialWarnings = ref(storedDocument?.warnings || [])
   const instantSyncToken = ref(storedDocument ? 1 : 0)
 
   const mediaState = reactive({
@@ -291,7 +290,6 @@ function createStore() {
     bumpHistory()
     replaceTree(entry.tree)
     instantSyncToken.value += 1
-    toast.info(`بازگشت: ${entry.label}`)
     return true
   }
 
@@ -307,7 +305,6 @@ function createStore() {
     bumpHistory()
     replaceTree(entry.tree)
     instantSyncToken.value += 1
-    toast.info(`تکرار: ${entry.label}`)
     return true
   }
 
@@ -387,7 +384,6 @@ function createStore() {
     if (!node) return { ok: false, error: 'گره پیدا نشد.' }
     const cleaned = String(label ?? '').replace(/\r\n?/g, '\n').trim()
     if (!cleaned) {
-      toast.warning('عنوان گره نمی‌تواند خالی باشد.')
       return { ok: false, error: 'عنوان خالی است.' }
     }
     if (cleaned === node.label) {
@@ -414,7 +410,6 @@ function createStore() {
     const result = updateNodeNote(tree.value, id, cleaned)
     if (result.ok) {
       markTreeChanged()
-      toast.success('یادداشت ذخیره شد.')
     }
     return result
   }
@@ -426,6 +421,8 @@ function createStore() {
       return null
     }
     recordUndo('افزودن گره')
+    // گره تازه سمت ثابت نمی‌گیرد؛ اگر از زیرشاخه‌های گره مرکزی است، سمت
+    // هیچ‌کدام را قفل نمی‌کند و چیدمان دوطرفه انتخاب می‌کند.
     const node = createNode('شاخه جدید', collectIds(toRaw(tree.value)))
     const result = addChildNode(tree.value, parentId, node)
     if (!result.ok) {
@@ -445,7 +442,6 @@ function createStore() {
       return null
     }
     if (!located.parent) {
-      toast.info('گره مرکزی همسایه ندارد؛ یک فرزند اضافه شد.')
       return addChild(nodeId)
     }
     recordUndo('افزودن همسایه')
@@ -468,7 +464,6 @@ function createStore() {
       return false
     }
     if (!located.parent) {
-      toast.warning('گره مرکزی قابل حذف نیست.')
       return false
     }
     const descendantCount = countDescendants(located.node)
@@ -499,7 +494,6 @@ function createStore() {
     }
     editingId.value = null
     markTreeChanged()
-    toast.success('گره حذف شد.')
     return true
   }
 
@@ -507,10 +501,7 @@ function createStore() {
     const node = findNode(tree.value, nodeId)
     if (!node) return false
     const result = toggleNodeCollapsed(tree.value, nodeId)
-    if (!result.ok) {
-      toast.info(result.error)
-      return false
-    }
+    if (!result.ok) return false
     if (editingId.value && !findNode(tree.value, editingId.value)) {
       editingId.value = null
     }
@@ -547,24 +538,61 @@ function createStore() {
     }
     selectedId.value = nodeId
     markTreeChanged()
-    toast.success('گره منتقل شد.')
     return true
   }
 
-  function moveSibling(nodeId, delta) {
-    const info = getSiblingInfo(tree.value, nodeId)
-    if (!info) {
-      toast.error('گره قابل جابه‌جایی نیست.')
+  /**
+   * ثبت نتیجه یک کشیدن: یک ورودی تاریخچه برای کل عملیات.
+   * ورودی از resolveDropTarget می‌آید و پیش از تغییر درخت اعتبارسنجی می‌شود.
+   */
+  function applyDrop(nodeId, target) {
+    if (!target || !target.valid || target.kind === 'none') return false
+    const located = findNodeWithParent(tree.value, nodeId)
+    if (!located || !located.parent) {
+      toast.error('گره مرکزی قابل جابه‌جایی نیست.')
       return false
     }
+    if (isDescendant(tree.value, nodeId, target.parentId)) {
+      toast.error('گره را نمی‌توان زیر شاخه خودش منتقل کرد.')
+      return false
+    }
+
+    if (!Number.isInteger(target.index) || target.index < 0) return false
+
+    recordUndo('جابه‌جایی گره')
+
+    // چیدمان خودکار مالک مختصات است؛ کاربر فقط ایندکس و سمت را انتخاب
+    // می‌کند. بنابراین نتیجه بی‌درنگ تمیز، فاصله‌دار و بدون هم‌پوشانی است
+    // و با پیش‌نمایش (که همان ایندکس/سمت را نشان می‌داد) هم‌خوان می‌ماند.
+    const result = reparentNode(tree.value, nodeId, target.parentId, target.index)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    // فقط خود گره جهت انتخابی کاربر را می‌گیرد. هم‌نیاهای دیگر دست‌نخورده
+    // می‌مانند تا چیدمان دوطرفه حفظ شود و یک درگ کل شاخه را یک‌طرفه نکند.
+    const node = result.node
+    if (target.side === 'left' || target.side === 'right') {
+      node.side = target.side
+    }
+
+
+    selectedId.value = nodeId
+    markTreeChanged()
+    return true
+  }
+
+
+
+  function moveSibling(nodeId, delta) {
+    const info = getSiblingInfo(tree.value, nodeId)
+    if (!info) return false
     const targetIndex = info.index + delta
     if (targetIndex < 0 || targetIndex >= info.count) return false
     recordUndo('جابه‌جایی گره')
     const result = moveNodeAmongSiblings(tree.value, nodeId, delta)
-    if (!result.ok) {
-      toast.info(result.error)
-      return false
-    }
+    if (!result.ok) return false
     markTreeChanged()
     return true
   }
@@ -680,6 +708,73 @@ function createStore() {
       return
     }
     const normalizedMode = mode === 'full' ? 'full' : 'incremental'
+    const base = cloneTree(sampleMindmap)
+    await streamTreeSource(base, normalizedMode, 'تولید مایندمپ', true)
+  }
+
+  /**
+   * بارگذاری داده بیرونی (مثلاً از پراپ پکیج) و نمایش تدریجی آن.
+   * ورودی می‌تواند درخت خام یا پوشش { root } باشد و با normalizeTree اعتبارسنجی می‌شود.
+   * با gradual=true ابتدا فقط ریشه نمایش داده می‌شود و بقیه گره‌ها
+   * به‌صورت تدریجی (استریم شبیه‌سازی‌شده) اضافه می‌شوند؛ با gradual=false
+   * کل درخت یک‌باره جایگزین می‌شود و انیمیشن رشد از طریق growthEngine انجام می‌شود.
+   */
+  async function loadExternalData(rawData, options = {}) {
+    const gradual = options.gradual !== false
+    const normalizedMode = options.mode === 'full' ? 'full' : 'incremental'
+    const announce = options.announce !== false
+    const candidate = rawData?.root ?? rawData
+    const normalized = normalizeTree(candidate)
+    if (!normalized.ok) {
+      if (announce) toast.error('ساختار داده بیرونی معتبر نیست: ریشه درخت پیدا نشد.')
+      return { ok: false, warnings: normalized.warnings, errors: normalized.errors }
+    }
+
+    const sourceTree = normalized.tree
+    if (!gradual) {
+      if (isStreaming.value) {
+        streamController?.abort()
+        for (let attempt = 0; attempt < 200 && isStreaming.value; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        if (isStreaming.value) {
+          if (announce) toast.info('یک تولید در حال اجراست؛ ابتدا آن را متوقف یا کامل کنید.')
+          return { ok: false, busy: true }
+        }
+      }
+      streamSnapshot = cloneTree(toRaw(tree.value))
+      historySuspended.value = true
+      try {
+        recordUndoSilent('بارگذاری داده')
+        growthEngine.reset()
+        tree.value = sourceTree
+        selectedId.value = sourceTree.id
+        streamReceived.value = countNodes(sourceTree)
+        streamStatus.value = 'complete'
+        markTreeChanged()
+      } finally {
+        historySuspended.value = false
+      }
+      return { ok: true, warnings: normalized.warnings, nodeCount: countNodes(sourceTree) }
+    }
+    if (isStreaming.value) {
+      if (announce) toast.info('یک تولید در حال اجراست؛ ابتدا آن را متوقف یا کامل کنید.')
+      return { ok: false, busy: true }
+    }
+    await streamTreeSource(sourceTree, normalizedMode, 'بارگذاری داده', announce, options.baseDelay)
+    return { ok: true, warnings: normalized.warnings, nodeCount: countNodes(toRaw(tree.value)) }
+  }
+
+  function recordUndoSilent(label) {
+    if (streamSnapshot) {
+      history.record(streamSnapshot, label)
+      bumpHistory()
+      streamSnapshot = null
+    }
+  }
+
+  /** هسته مشترک استریم تدریجی؛ توسط startGeneration و loadExternalData استفاده می‌شود. */
+  async function streamTreeSource(base, normalizedMode, historyLabel, announce = true, baseDelay) {
     streamSnapshot = cloneTree(toRaw(tree.value))
     historySuspended.value = true
     pendingStreamEvents = []
@@ -693,7 +788,6 @@ function createStore() {
     clearSearch()
 
     growthEngine.reset()
-    const base = cloneTree(sampleMindmap)
     const rootOnly = {
       id: base.id,
       label: base.label,
@@ -711,6 +805,7 @@ function createStore() {
       for await (const chunk of streamSampleMindmap(base, {
         mode: normalizedMode,
         signal: controller.signal,
+        ...(Number.isFinite(baseDelay) ? { baseDelay } : {}),
       })) {
         if (controller.signal.aborted) break
         if (chunk.type === 'complete') {
@@ -721,24 +816,26 @@ function createStore() {
       }
       if (!controller.signal.aborted) {
         streamStatus.value = 'complete'
-        toast.success(
-          `مایندمپ با ${toPersianDigits(countNodes(toRaw(tree.value)))} گره آماده شد.`,
-        )
+        if (announce) {
+          toast.success(
+            `مایندمپ با ${toPersianDigits(countNodes(toRaw(tree.value)))} گره آماده شد.`,
+          )
+        }
       }
     } catch (error) {
       if (error instanceof StreamAbortedError || error?.name === 'AbortError') {
         streamStatus.value = 'stopped'
-        toast.info('تولید متوقف شد؛ داده‌های دریافت‌شده حفظ شدند.')
+        if (announce) toast.info('تولید متوقف شد؛ داده‌های دریافت‌شده حفظ شدند.')
       } else {
         streamStatus.value = 'error'
-        toast.error(`دریافت داده ناموفق بود: ${error?.message || 'خطای نامشخص'}`)
+        if (announce) toast.error(`دریافت داده ناموفق بود: ${error?.message || 'خطای نامشخص'}`)
       }
     } finally {
       isStreaming.value = false
       if (streamController === controller) streamController = null
       historySuspended.value = false
       if (streamSnapshot) {
-        history.record(streamSnapshot, 'تولید مایندمپ')
+        history.record(streamSnapshot, historyLabel)
         bumpHistory()
         streamSnapshot = null
       }
@@ -769,7 +866,6 @@ function createStore() {
     activePanel.value = null
     instantSyncToken.value += 1
     markTreeChanged()
-    toast.info('نقشه پاک شد؛ می‌توانید از نو بسازید.')
   }
 
   function startBlankMap() {
@@ -780,20 +876,13 @@ function createStore() {
   /* ------------------------------ پخش انیمیشن ------------------------------ */
 
   function replayAnimation() {
-    const started = growthEngine.replay()
-    if (!started) {
-      toast.info('هنوز گره‌ای برای پخش وجود ندارد.')
-    }
-    return started
+    return growthEngine.replay()
   }
 
   function replayBranch(nodeId = selectedId.value) {
     const started = growthEngine.replaySubtree(nodeId)
     if (started) {
-      toast.info('رشد این شاخه از نو آغاز شد.')
-      focusNode(nodeId, { scale: Math.max(0.85, 0.85), reveal: true })
-    } else {
-      toast.warning('این شاخه در نمای فعلی قابل پخش نیست.')
+      focusNode(nodeId, { scale: 0.85, reveal: true })
     }
     return started
   }
@@ -898,7 +987,6 @@ function createStore() {
     isMotionReduced,
     instantSyncToken,
     savedAt,
-    initialWarnings,
     // انتخاب و ویرایش
     selectedId,
     selectedTreeNode,
@@ -918,6 +1006,7 @@ function createStore() {
     performDeleteNode,
     toggleCollapse,
     moveNodeToParent,
+    applyDrop,
     moveSibling,
     // تاریخچه
     canUndo,
@@ -949,6 +1038,7 @@ function createStore() {
     streamWarnings,
     startGeneration,
     stopGeneration,
+    loadExternalData,
     clearMap,
     startBlankMap,
     // انیمیشن

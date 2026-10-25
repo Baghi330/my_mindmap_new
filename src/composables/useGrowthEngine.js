@@ -52,6 +52,22 @@ export function createGrowthEngine() {
   let lastFrameTime = 0
   let userPaused = false
 
+  const hasAnimationFrame = () =>
+    typeof requestAnimationFrame === 'function' &&
+    typeof cancelAnimationFrame === 'function'
+
+  const requestFrame = (callback) => {
+    if (typeof requestAnimationFrame === 'function') {
+      return requestAnimationFrame(callback)
+    }
+    return 0
+  }
+
+  const cancelFrame = (id) => {
+    if (!id) return
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id)
+  }
+
   const applyEdgeState = (entry, edgeProgress) => {
     const element = edgeElements.get(entry.id)
     if (!element) return
@@ -121,7 +137,7 @@ export function createGrowthEngine() {
     isComplete.value = true
     progress.value = 1
     drawnCount.value = totalCount.value
-    if (rafId) cancelAnimationFrame(rafId)
+    cancelFrame(rafId)
     rafId = 0
     lastFrameTime = 0
   }
@@ -159,7 +175,7 @@ export function createGrowthEngine() {
       finishAll()
       return
     }
-    rafId = requestAnimationFrame(frame)
+    rafId = requestFrame(frame)
   }
 
   const play = () => {
@@ -169,13 +185,20 @@ export function createGrowthEngine() {
     isPlaying.value = true
     isComplete.value = false
     lastFrameTime = 0
-    if (!rafId) rafId = requestAnimationFrame(frame)
+    if (!rafId) {
+      if (hasAnimationFrame()) {
+        rafId = requestFrame(frame)
+      } else {
+        // بدون RAF (مثل SSR): همه گره‌ها را فوراً کامل نشان بده.
+        finishAll()
+      }
+    }
   }
 
   const pause = () => {
     userPaused = true
     isPlaying.value = false
-    if (rafId) cancelAnimationFrame(rafId)
+    cancelFrame(rafId)
     rafId = 0
     lastFrameTime = 0
   }
@@ -338,7 +361,7 @@ export function createGrowthEngine() {
 
   const replay = () => {
     if (lastNodes.length === 0) return false
-    if (rafId) cancelAnimationFrame(rafId)
+    cancelFrame(rafId)
     rafId = 0
     entries.clear()
     clock = 0

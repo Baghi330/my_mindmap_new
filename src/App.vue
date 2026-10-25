@@ -6,7 +6,6 @@ import { useViewport } from './composables/useViewport.js'
 import { useToast } from './composables/useToast.js'
 import { printMindmap } from './services/exporters.js'
 import { themeToCssVariables } from './theme/palettes.js'
-import { toPersianDigits } from './utils/text.js'
 import AppHeader from './components/AppHeader.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import ContextMenu from './components/ContextMenu.vue'
@@ -121,8 +120,7 @@ function navigateWithArrow(direction) {
 
 function saveNow() {
   const saved = store.saveDocumentNow(true)
-  if (saved) toast.success('نقشه در مرورگر ذخیره شد.')
-  else toast.error('ذخیره‌سازی ناموفق بود.')
+  if (!saved) toast.error('ذخیره‌سازی ناموفق بود.')
 }
 
 async function printCurrentMindmap() {
@@ -134,7 +132,6 @@ async function printCurrentMindmap() {
       title: store.rootLabel.value,
       subtitle: 'ذهن‌نگار • مایندمپ پژوهشی',
     })
-    toast.info('پنجره چاپ آماده شد.')
   } catch (error) {
     toast.error(`چاپ ناموفق بود: ${error?.message || 'خطای نامشخص'}`)
   } finally {
@@ -246,16 +243,7 @@ function handleGlobalKeydown(event) {
 
 /* ------------------------------- چرخه عمر ------------------------------- */
 
-function announceInitialWarnings() {
-  const warnings = store.initialWarnings.value
-  if (!Array.isArray(warnings) || warnings.length === 0) return
-  const firstWarning = warnings[0]
-  const message =
-    warnings.length === 1
-      ? firstWarning
-      : `${firstWarning} (${toPersianDigits(warnings.length)} هشدار در بازیابی سند)`
-  toast.warning(message, 6500)
-}
+
 
 onMounted(() => {
   syncHeaderHeight()
@@ -268,7 +256,6 @@ onMounted(() => {
   }
   window.addEventListener('resize', syncHeaderHeight)
   window.addEventListener('keydown', handleGlobalKeydown)
-  announceInitialWarnings()
 })
 
 onBeforeUnmount(() => {

@@ -2,6 +2,13 @@
 import { useToast } from '../composables/useToast.js'
 import UiIcon from './UiIcon.vue'
 
+defineProps({
+  /** در حالت جاسازی پکیج، تلپورت غیرفعال می‌شود تا زیر .mindmap-viewer بماند */
+  disableTeleport: { type: Boolean, default: false },
+  /** متغیرهای تم برای ریشه پیام‌ها (چون تلپورت ارث‌بری CSS را می‌شکند) */
+  styleVars: { type: Object, default: null },
+})
+
 const { toasts, dismissToast } = useToast()
 
 const icons = {
@@ -13,8 +20,14 @@ const icons = {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TransitionGroup name="toast" tag="div" class="toast-stack" aria-live="polite">
+  <Teleport to="body" :disabled="disableTeleport">
+    <TransitionGroup
+      name="toast"
+      tag="div"
+      class="toast-stack"
+      :style="styleVars"
+      aria-live="polite"
+    >
       <div
         v-for="toast in toasts"
         :key="toast.id"

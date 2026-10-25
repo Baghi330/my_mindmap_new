@@ -1,15 +1,5 @@
 <template>
-  <header ref="headerRoot" class="app-header">
-    <button class="brand" type="button" title="نمایش کل درخت" @click="goHome">
-      <span class="brand-mark">
-        <UiIcon name="logo" :size="20" :stroke-width="1.6" />
-      </span>
-      <span class="brand-text">
-        <strong>ذهن‌نگار</strong>
-        <small>مایندمپ پژوهشی هوش مصنوعی</small>
-      </span>
-    </button>
-
+  <header class="app-header">
     <div class="header-search">
       <div class="search-field" :class="{ 'has-query': hasSearch }">
         <UiIcon class="search-icon" name="search" :size="16" />
@@ -99,76 +89,6 @@
       <span class="divider-vertical header-divider" aria-hidden="true"></span>
 
       <div class="menu-anchor" data-menu-root>
-        <div
-          class="generate-group"
-          :class="{ 'is-streaming': store.isStreaming.value }"
-        >
-          <button
-            type="button"
-            class="btn generate-main"
-            :class="store.isStreaming.value ? 'btn-danger' : 'btn-primary'"
-            :aria-label="
-              store.isStreaming.value ? 'توقف تولید' : 'تولید مایندمپ'
-            "
-            @click="handlePrimaryGenerate"
-          >
-            <UiIcon
-              :name="store.isStreaming.value ? 'stop' : 'sparkles'"
-              :size="16"
-              :class="{ spin: store.isStreaming.value }"
-            />
-            <span class="generate-label">
-              {{ store.isStreaming.value ? "توقف تولید" : "تولید مایندمپ" }}
-            </span>
-          </button>
-          <button
-            type="button"
-            class="generate-caret"
-            :class="{ 'is-open': generateMenuOpen }"
-            title="حالت‌های تولید"
-            aria-label="حالت‌های تولید"
-            :aria-expanded="generateMenuOpen"
-            @click="
-              generateMenuOpen = !generateMenuOpen;
-              exportMenuOpen = false;
-            "
-          >
-            <UiIcon name="chevron-down" :size="13" />
-          </button>
-        </div>
-        <Transition name="menu-fade">
-          <div v-if="generateMenuOpen" class="menu header-menu generate-menu">
-            <div class="menu-label">دریافت داده از هوش مصنوعی</div>
-            <button
-              type="button"
-              class="menu-item"
-              :disabled="store.isStreaming.value"
-              @click="generate('incremental')"
-            >
-              <UiIcon name="sparkles" :size="15" />
-              <span>تولید تدریجی</span>
-              <span class="menu-hint">شبیه‌سازی استریم</span>
-            </button>
-            <button
-              type="button"
-              class="menu-item"
-              :disabled="store.isStreaming.value"
-              @click="generate('full')"
-            >
-              <UiIcon name="branch" :size="15" />
-              <span>نمایش درخت کامل</span>
-              <span class="menu-hint">دریافت یک‌باره</span>
-            </button>
-            <div class="menu-separator"></div>
-            <button type="button" class="menu-item is-danger" @click="clearMap">
-              <UiIcon name="trash" :size="15" />
-              <span>پاک‌کردن نقشه</span>
-            </button>
-          </div>
-        </Transition>
-      </div>
-
-      <div class="menu-anchor" data-menu-root>
         <button
           type="button"
           class="icon-btn"
@@ -176,10 +96,7 @@
           title="خروجی و چاپ"
           aria-label="خروجی و چاپ"
           :aria-expanded="exportMenuOpen"
-          @click="
-            exportMenuOpen = !exportMenuOpen;
-            generateMenuOpen = false;
-          "
+          @click="exportMenuOpen = !exportMenuOpen"
         >
           <UiIcon
             :name="exportBusy ? 'refresh' : 'download'"
@@ -258,9 +175,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useMindmapStore } from "../composables/useMindmapStore.js";
-import { useViewport } from "../composables/useViewport.js";
 import { useToast } from "../composables/useToast.js";
-import { askConfirm } from "../composables/useConfirm.js";
 import {
   exportMindmapJson,
   exportMindmapPng,
@@ -271,12 +186,9 @@ import { toPersianDigits } from "../utils/text.js";
 import UiIcon from "./UiIcon.vue";
 
 const store = useMindmapStore();
-const viewport = useViewport();
 const toast = useToast();
 
-const headerRoot = ref(null);
 const searchInput = ref(null);
-const generateMenuOpen = ref(false);
 const exportMenuOpen = ref(false);
 const exportBusy = ref("");
 
@@ -287,12 +199,9 @@ const currentMatchNumber = computed(() => {
   return Math.min(store.activeSearchIndex.value + 1, resultCount.value);
 });
 const isDark = computed(() => store.resolvedTheme.value === "dark");
-const anyMenuOpen = computed(
-  () => generateMenuOpen.value || exportMenuOpen.value,
-);
+const anyMenuOpen = computed(() => exportMenuOpen.value);
 
 function closeMenus() {
-  generateMenuOpen.value = false;
   exportMenuOpen.value = false;
 }
 
@@ -324,47 +233,8 @@ function handleSearchKeydown(event) {
   }
 }
 
-function handlePrimaryGenerate() {
-  if (store.isStreaming.value) {
-    store.stopGeneration();
-    return;
-  }
-  store.startGeneration("incremental");
-}
-
-async function generate(mode) {
-  closeMenus();
-  if (store.isStreaming.value) {
-    toast.info("ابتدا تولید فعلی را متوقف یا کامل کنید.");
-    return;
-  }
-  await store.startGeneration(mode);
-}
-
-async function clearMap() {
-  closeMenus();
-  if (store.isStreaming.value) {
-    toast.info("ابتدا تولید در حال اجرا را متوقف کنید.");
-    return;
-  }
-  const confirmed = await askConfirm({
-    title: "پاک‌کردن نقشه",
-    message:
-      "همه گره‌ها از بوم حذف می‌شوند و فقط گره مرکزی باقی می‌ماند. این کار با Ctrl+Z قابل بازگشت است.",
-    confirmLabel: "پاک کن",
-    tone: "danger",
-  });
-  if (confirmed) store.clearMap();
-}
-
 function toggleTheme() {
   store.setThemeMode(isDark.value ? "light" : "dark");
-}
-
-function goHome() {
-  store.selectNode(store.tree.value.id);
-  viewport.fitView({ padding: 92, duration: 420 });
-  closeMenus();
 }
 
 async function exportMindmap(kind) {
@@ -379,17 +249,13 @@ async function exportMindmap(kind) {
   try {
     await nextTick();
     if (kind === "json") {
-      const fileName = exportMindmapJson(store.tree.value, options);
-      toast.success(`فایل ${fileName} ساخته شد.`);
+      exportMindmapJson(store.tree.value, options);
     } else if (kind === "svg") {
-      const fileName = await exportMindmapSvg(store.layout.value, options);
-      toast.success(`فایل ${fileName} ساخته شد.`);
+      await exportMindmapSvg(store.layout.value, options);
     } else if (kind === "png") {
-      const fileName = await exportMindmapPng(store.layout.value, options);
-      toast.success(`فایل ${fileName} ساخته شد.`);
+      await exportMindmapPng(store.layout.value, options);
     } else if (kind === "print") {
       await printMindmap(store.layout.value, options);
-      toast.info("پنجره چاپ آماده شد.");
     }
   } catch (error) {
     toast.error(`خروجی ناموفق بود: ${error?.message || "خطای نامشخص"}`);
@@ -438,54 +304,6 @@ defineExpose({ focusSearch });
   background: color-mix(in srgb, var(--app-bg) 78%, transparent);
   backdrop-filter: blur(20px);
   flex: none;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: right;
-  border-radius: 10px;
-  padding: 3px 4px;
-  flex: none;
-  transition: background-color 160ms ease;
-}
-
-.brand:hover {
-  background: var(--surface-hover);
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  color: var(--accent-text);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--accent) 88%, #ffffff 12%),
-    var(--accent)
-  );
-  box-shadow: 0 8px 18px -10px var(--accent);
-}
-
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.3;
-}
-
-.brand-text strong {
-  font-size: 14.5px;
-  font-weight: 750;
-  letter-spacing: -0.01em;
-}
-
-.brand-text small {
-  font-size: 10px;
-  color: var(--text-faint);
-  font-weight: 500;
 }
 
 .header-search {
@@ -592,53 +410,6 @@ defineExpose({ focusSearch });
   gap: 0;
 }
 
-.generate-group {
-  display: inline-flex;
-  align-items: stretch;
-  height: 36px;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 6px 16px -10px
-    color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-.generate-main {
-  height: 36px;
-  border-radius: 0;
-  padding: 0 12px;
-  font-size: 12.5px;
-  box-shadow: none;
-  gap: 6px;
-}
-
-.generate-caret {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  color: var(--accent-text);
-  background: var(--accent);
-  border-inline-start: 1px solid color-mix(in srgb, #ffffff 24%, transparent);
-  transition: background-color 150ms ease;
-}
-
-.generate-caret:hover {
-  background: var(--accent-hover);
-}
-
-.generate-caret.is-open {
-  background: var(--accent-hover);
-}
-
-.generate-group.is-streaming {
-  box-shadow: none;
-}
-
-.generate-group.is-streaming .generate-caret {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-inline-start-color: color-mix(in srgb, var(--danger) 20%, transparent);
-}
-
 .menu-anchor {
   position: relative;
 }
@@ -648,11 +419,6 @@ defineExpose({ focusSearch });
   top: calc(100% + 9px);
   left: 0;
   min-width: 244px;
-}
-
-.generate-menu {
-  left: auto;
-  right: 0;
 }
 
 .export-menu {
@@ -673,10 +439,6 @@ defineExpose({ focusSearch });
 }
 
 @media (max-width: 920px) {
-  .brand-text small {
-    display: none;
-  }
-
   .header-divider {
     display: none;
   }
@@ -692,11 +454,7 @@ defineExpose({ focusSearch });
   }
 
   .brand {
-    padding: 0;
-  }
-
-  .brand-text strong {
-    font-size: 13.5px;
+    display: none;
   }
 
   .header-search {
@@ -718,12 +476,6 @@ defineExpose({ focusSearch });
     display: none;
   }
 
-  .generate-label {
-    max-width: 92px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .header-menu {
     position: fixed;
     top: calc(var(--header-height, 96px) + 6px);
@@ -732,7 +484,6 @@ defineExpose({ focusSearch });
     min-width: 0;
   }
 
-  .generate-menu,
   .export-menu {
     right: 10px;
     left: 10px;
@@ -740,14 +491,6 @@ defineExpose({ focusSearch });
 }
 
 @media (max-width: 480px) {
-  .generate-label {
-    display: none;
-  }
-
-  .generate-main {
-    padding: 0 10px;
-  }
-
   .header-actions {
     gap: 0;
   }

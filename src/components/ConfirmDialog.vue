@@ -4,6 +4,11 @@ import { useConfirm } from '../composables/useConfirm.js'
 import UiIcon from './UiIcon.vue'
 
 const { confirmState, resolveConfirm } = useConfirm()
+
+defineProps({
+  disableTeleport: { type: Boolean, default: false },
+  styleVars: { type: Object, default: null },
+})
 const cancelButton = ref(null)
 
 watch(confirmState, (state) => {
@@ -35,11 +40,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="disableTeleport">
     <Transition name="dialog">
       <div
         v-if="confirmState"
-        class="dialog-overlay"
+        class="dialog-overlay mindmap-viewer"
+        :style="styleVars"
         role="presentation"
         @pointerdown.self="resolveConfirm(false)"
       >
