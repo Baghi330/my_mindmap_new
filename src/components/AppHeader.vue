@@ -1,166 +1,3 @@
-<script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useMindmapStore } from '../composables/useMindmapStore.js'
-import { useViewport } from '../composables/useViewport.js'
-import { useToast } from '../composables/useToast.js'
-import { askConfirm } from '../composables/useConfirm.js'
-import {
-  exportMindmapJson,
-  exportMindmapPng,
-  exportMindmapSvg,
-  printMindmap,
-} from '../services/exporters.js'
-import { toPersianDigits } from '../utils/text.js'
-import UiIcon from './UiIcon.vue'
-
-const store = useMindmapStore()
-const viewport = useViewport()
-const toast = useToast()
-
-const headerRoot = ref(null)
-const searchInput = ref(null)
-const generateMenuOpen = ref(false)
-const exportMenuOpen = ref(false)
-const exportBusy = ref('')
-
-const hasSearch = computed(() => store.searchQuery.value.trim().length > 0)
-const resultCount = computed(() => store.searchResults.value.length)
-const currentMatchNumber = computed(() => {
-  if (!hasSearch.value || resultCount.value === 0) return 0
-  return Math.min(store.activeSearchIndex.value + 1, resultCount.value)
-})
-const isDark = computed(() => store.resolvedTheme.value === 'dark')
-const anyMenuOpen = computed(() => generateMenuOpen.value || exportMenuOpen.value)
-
-function closeMenus() {
-  generateMenuOpen.value = false
-  exportMenuOpen.value = false
-}
-
-function focusSearch() {
-  nextTick(() => {
-    searchInput.value?.focus({ preventScroll: true })
-    searchInput.value?.select()
-  })
-}
-
-function handleSearchInput(event) {
-  store.setSearchQuery(event.target.value)
-}
-
-function handleSearchKeydown(event) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    if (resultCount.value > 0) store.focusActiveSearchResult()
-  } else if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    store.navigateSearch(1)
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    store.navigateSearch(-1)
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    store.clearSearch()
-    searchInput.value?.blur()
-  }
-}
-
-function handlePrimaryGenerate() {
-  if (store.isStreaming.value) {
-    store.stopGeneration()
-    return
-  }
-  store.startGeneration('incremental')
-}
-
-async function generate(mode) {
-  closeMenus()
-  if (store.isStreaming.value) {
-    toast.info('ابتدا تولید فعلی را متوقف یا کامل کنید.')
-    return
-  }
-  await store.startGeneration(mode)
-}
-
-async function clearMap() {
-  closeMenus()
-  if (store.isStreaming.value) {
-    toast.info('ابتدا تولید در حال اجرا را متوقف کنید.')
-    return
-  }
-  const confirmed = await askConfirm({
-    title: 'پاک‌کردن نقشه',
-    message: 'همه گره‌ها از بوم حذف می‌شوند و فقط گره مرکزی باقی می‌ماند. این کار با Ctrl+Z قابل بازگشت است.',
-    confirmLabel: 'پاک کن',
-    tone: 'danger',
-  })
-  if (confirmed) store.clearMap()
-}
-
-function toggleTheme() {
-  store.setThemeMode(isDark.value ? 'light' : 'dark')
-}
-
-function goHome() {
-  store.selectNode(store.tree.value.id)
-  viewport.fitView({ padding: 92, duration: 420 })
-  closeMenus()
-}
-
-async function exportMindmap(kind) {
-  closeMenus()
-  if (exportBusy.value) return
-  exportBusy.value = kind
-  const options = {
-    theme: store.theme.value,
-    title: store.rootLabel.value,
-    subtitle: 'ذهن‌نگار • مایندمپ پژوهشی',
-  }
-  try {
-    await nextTick()
-    if (kind === 'json') {
-      const fileName = exportMindmapJson(store.tree.value, options)
-      toast.success(`فایل ${fileName} ساخته شد.`)
-    } else if (kind === 'svg') {
-      const fileName = await exportMindmapSvg(store.layout.value, options)
-      toast.success(`فایل ${fileName} ساخته شد.`)
-    } else if (kind === 'png') {
-      const fileName = await exportMindmapPng(store.layout.value, options)
-      toast.success(`فایل ${fileName} ساخته شد.`)
-    } else if (kind === 'print') {
-      await printMindmap(store.layout.value, options)
-      toast.info('پنجره چاپ آماده شد.')
-    }
-  } catch (error) {
-    toast.error(`خروجی ناموفق بود: ${error?.message || 'خطای نامشخص'}`)
-  } finally {
-    exportBusy.value = ''
-  }
-}
-
-function handleDocumentPointerDown(event) {
-  if (!anyMenuOpen.value) return
-  if (event.target.closest?.('.menu') || event.target.closest?.('[data-menu-root]')) return
-  closeMenus()
-}
-
-function handleDocumentKeydown(event) {
-  if (event.key === 'Escape') closeMenus()
-}
-
-onMounted(() => {
-  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
-  document.addEventListener('keydown', handleDocumentKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
-  document.removeEventListener('keydown', handleDocumentKeydown)
-})
-
-defineExpose({ focusSearch })
-</script>
-
 <template>
   <header ref="headerRoot" class="app-header">
     <button class="brand" type="button" title="نمایش کل درخت" @click="goHome">
@@ -188,7 +25,8 @@ defineExpose({ focusSearch })
         />
         <span v-if="hasSearch" class="search-count" aria-live="polite">
           <template v-if="resultCount > 0">
-            {{ toPersianDigits(currentMatchNumber) }} از {{ toPersianDigits(resultCount) }}
+            {{ toPersianDigits(currentMatchNumber) }} از
+            {{ toPersianDigits(resultCount) }}
           </template>
           <template v-else>بدون نتیجه</template>
         </span>
@@ -232,7 +70,11 @@ defineExpose({ focusSearch })
           type="button"
           class="icon-btn"
           :disabled="!store.canUndo.value"
-          :title="store.canUndo.value ? `بازگشت: ${store.undoLabel.value}` : 'بازگشتی وجود ندارد'"
+          :title="
+            store.canUndo.value
+              ? `بازگشت: ${store.undoLabel.value}`
+              : 'بازگشتی وجود ندارد'
+          "
           aria-label="بازگشت"
           @click="store.undo()"
         >
@@ -242,7 +84,11 @@ defineExpose({ focusSearch })
           type="button"
           class="icon-btn"
           :disabled="!store.canRedo.value"
-          :title="store.canRedo.value ? `تکرار: ${store.redoLabel.value}` : 'تکراری وجود ندارد'"
+          :title="
+            store.canRedo.value
+              ? `تکرار: ${store.redoLabel.value}`
+              : 'تکراری وجود ندارد'
+          "
           aria-label="تکرار"
           @click="store.redo()"
         >
@@ -253,12 +99,17 @@ defineExpose({ focusSearch })
       <span class="divider-vertical header-divider" aria-hidden="true"></span>
 
       <div class="menu-anchor" data-menu-root>
-        <div class="generate-group" :class="{ 'is-streaming': store.isStreaming.value }">
+        <div
+          class="generate-group"
+          :class="{ 'is-streaming': store.isStreaming.value }"
+        >
           <button
             type="button"
             class="btn generate-main"
             :class="store.isStreaming.value ? 'btn-danger' : 'btn-primary'"
-            :aria-label="store.isStreaming.value ? 'توقف تولید' : 'تولید مایندمپ'"
+            :aria-label="
+              store.isStreaming.value ? 'توقف تولید' : 'تولید مایندمپ'
+            "
             @click="handlePrimaryGenerate"
           >
             <UiIcon
@@ -267,7 +118,7 @@ defineExpose({ focusSearch })
               :class="{ spin: store.isStreaming.value }"
             />
             <span class="generate-label">
-              {{ store.isStreaming.value ? 'توقف تولید' : 'تولید مایندمپ' }}
+              {{ store.isStreaming.value ? "توقف تولید" : "تولید مایندمپ" }}
             </span>
           </button>
           <button
@@ -277,7 +128,10 @@ defineExpose({ focusSearch })
             title="حالت‌های تولید"
             aria-label="حالت‌های تولید"
             :aria-expanded="generateMenuOpen"
-            @click="generateMenuOpen = !generateMenuOpen; exportMenuOpen = false"
+            @click="
+              generateMenuOpen = !generateMenuOpen;
+              exportMenuOpen = false;
+            "
           >
             <UiIcon name="chevron-down" :size="13" />
           </button>
@@ -322,30 +176,53 @@ defineExpose({ focusSearch })
           title="خروجی و چاپ"
           aria-label="خروجی و چاپ"
           :aria-expanded="exportMenuOpen"
-          @click="exportMenuOpen = !exportMenuOpen; generateMenuOpen = false"
+          @click="
+            exportMenuOpen = !exportMenuOpen;
+            generateMenuOpen = false;
+          "
         >
-          <UiIcon :name="exportBusy ? 'refresh' : 'download'" :size="17" :class="{ spin: exportBusy }" />
+          <UiIcon
+            :name="exportBusy ? 'refresh' : 'download'"
+            :size="17"
+            :class="{ spin: exportBusy }"
+          />
         </button>
         <Transition name="menu-fade">
           <div v-if="exportMenuOpen" class="menu header-menu export-menu">
             <div class="menu-label">خروجی مایندمپ</div>
-            <button type="button" class="menu-item" @click="exportMindmap('json')">
+            <button
+              type="button"
+              class="menu-item"
+              @click="exportMindmap('json')"
+            >
               <UiIcon name="braces" :size="15" />
               <span>ساختار JSON</span>
               <span class="menu-hint">.json</span>
             </button>
-            <button type="button" class="menu-item" @click="exportMindmap('svg')">
+            <button
+              type="button"
+              class="menu-item"
+              @click="exportMindmap('svg')"
+            >
               <UiIcon name="branch" :size="15" />
               <span>گراف SVG</span>
               <span class="menu-hint">.svg</span>
             </button>
-            <button type="button" class="menu-item" @click="exportMindmap('png')">
+            <button
+              type="button"
+              class="menu-item"
+              @click="exportMindmap('png')"
+            >
               <UiIcon name="image" :size="15" />
               <span>تصویر PNG</span>
               <span class="menu-hint">.png</span>
             </button>
             <div class="menu-separator"></div>
-            <button type="button" class="menu-item" @click="exportMindmap('print')">
+            <button
+              type="button"
+              class="menu-item"
+              @click="exportMindmap('print')"
+            >
               <UiIcon name="printer" :size="15" />
               <span>چاپ مایندمپ</span>
               <span class="menu-hint">Ctrl P</span>
@@ -377,6 +254,176 @@ defineExpose({ focusSearch })
     </div>
   </header>
 </template>
+
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useMindmapStore } from "../composables/useMindmapStore.js";
+import { useViewport } from "../composables/useViewport.js";
+import { useToast } from "../composables/useToast.js";
+import { askConfirm } from "../composables/useConfirm.js";
+import {
+  exportMindmapJson,
+  exportMindmapPng,
+  exportMindmapSvg,
+  printMindmap,
+} from "../services/exporters.js";
+import { toPersianDigits } from "../utils/text.js";
+import UiIcon from "./UiIcon.vue";
+
+const store = useMindmapStore();
+const viewport = useViewport();
+const toast = useToast();
+
+const headerRoot = ref(null);
+const searchInput = ref(null);
+const generateMenuOpen = ref(false);
+const exportMenuOpen = ref(false);
+const exportBusy = ref("");
+
+const hasSearch = computed(() => store.searchQuery.value.trim().length > 0);
+const resultCount = computed(() => store.searchResults.value.length);
+const currentMatchNumber = computed(() => {
+  if (!hasSearch.value || resultCount.value === 0) return 0;
+  return Math.min(store.activeSearchIndex.value + 1, resultCount.value);
+});
+const isDark = computed(() => store.resolvedTheme.value === "dark");
+const anyMenuOpen = computed(
+  () => generateMenuOpen.value || exportMenuOpen.value,
+);
+
+function closeMenus() {
+  generateMenuOpen.value = false;
+  exportMenuOpen.value = false;
+}
+
+function focusSearch() {
+  nextTick(() => {
+    searchInput.value?.focus({ preventScroll: true });
+    searchInput.value?.select();
+  });
+}
+
+function handleSearchInput(event) {
+  store.setSearchQuery(event.target.value);
+}
+
+function handleSearchKeydown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (resultCount.value > 0) store.focusActiveSearchResult();
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    store.navigateSearch(1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    store.navigateSearch(-1);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    store.clearSearch();
+    searchInput.value?.blur();
+  }
+}
+
+function handlePrimaryGenerate() {
+  if (store.isStreaming.value) {
+    store.stopGeneration();
+    return;
+  }
+  store.startGeneration("incremental");
+}
+
+async function generate(mode) {
+  closeMenus();
+  if (store.isStreaming.value) {
+    toast.info("ابتدا تولید فعلی را متوقف یا کامل کنید.");
+    return;
+  }
+  await store.startGeneration(mode);
+}
+
+async function clearMap() {
+  closeMenus();
+  if (store.isStreaming.value) {
+    toast.info("ابتدا تولید در حال اجرا را متوقف کنید.");
+    return;
+  }
+  const confirmed = await askConfirm({
+    title: "پاک‌کردن نقشه",
+    message:
+      "همه گره‌ها از بوم حذف می‌شوند و فقط گره مرکزی باقی می‌ماند. این کار با Ctrl+Z قابل بازگشت است.",
+    confirmLabel: "پاک کن",
+    tone: "danger",
+  });
+  if (confirmed) store.clearMap();
+}
+
+function toggleTheme() {
+  store.setThemeMode(isDark.value ? "light" : "dark");
+}
+
+function goHome() {
+  store.selectNode(store.tree.value.id);
+  viewport.fitView({ padding: 92, duration: 420 });
+  closeMenus();
+}
+
+async function exportMindmap(kind) {
+  closeMenus();
+  if (exportBusy.value) return;
+  exportBusy.value = kind;
+  const options = {
+    theme: store.theme.value,
+    title: store.rootLabel.value,
+    subtitle: "ذهن‌نگار • مایندمپ پژوهشی",
+  };
+  try {
+    await nextTick();
+    if (kind === "json") {
+      const fileName = exportMindmapJson(store.tree.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "svg") {
+      const fileName = await exportMindmapSvg(store.layout.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "png") {
+      const fileName = await exportMindmapPng(store.layout.value, options);
+      toast.success(`فایل ${fileName} ساخته شد.`);
+    } else if (kind === "print") {
+      await printMindmap(store.layout.value, options);
+      toast.info("پنجره چاپ آماده شد.");
+    }
+  } catch (error) {
+    toast.error(`خروجی ناموفق بود: ${error?.message || "خطای نامشخص"}`);
+  } finally {
+    exportBusy.value = "";
+  }
+}
+
+function handleDocumentPointerDown(event) {
+  if (!anyMenuOpen.value) return;
+  if (
+    event.target.closest?.(".menu") ||
+    event.target.closest?.("[data-menu-root]")
+  )
+    return;
+  closeMenus();
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === "Escape") closeMenus();
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+  document.addEventListener("keydown", handleDocumentKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
+  document.removeEventListener("keydown", handleDocumentKeydown);
+});
+
+defineExpose({ focusSearch });
+</script>
 
 <style scoped>
 .app-header {
@@ -415,8 +462,11 @@ defineExpose({ focusSearch })
   height: 36px;
   border-radius: 11px;
   color: var(--accent-text);
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--accent) 88%, #ffffff 12%), var(--accent));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent) 88%, #ffffff 12%),
+    var(--accent)
+  );
   box-shadow: 0 8px 18px -10px var(--accent);
 }
 
@@ -548,7 +598,8 @@ defineExpose({ focusSearch })
   height: 36px;
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 6px 16px -10px
+    color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .generate-main {

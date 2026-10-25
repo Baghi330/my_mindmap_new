@@ -1,9 +1,21 @@
 {
   "name": "mindmap-ai",
-  "private": true,
   "version": "1.0.0",
   "type": "module",
   "description": "مایندمپ تعاملی با نمایش تدریجی رشد درخت",
+  "main": "./dist/mindmap-ai.js",
+  "module": "./dist/mindmap-ai.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/mindmap-ai.js"
+    },
+    "./style.css": "./dist/mindmap-ai.css"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,8 +23,8 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {
-    "vue": "^3.5.44"
+  "peerDependencies": {
+    "vue": "^3.5.0"
   },
   "devDependencies": {
     "@fontsource-variable/vazirmatn": "^5.3.0",
