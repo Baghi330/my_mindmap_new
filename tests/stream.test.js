@@ -22,12 +22,12 @@ describe('لایه دریافت داده', () => {
     const events = flattenTreeToEvents(sampleMindmap)
     expect(events).toHaveLength(countNodes(sampleMindmap))
     expect(events[0]).toMatchObject({ id: sampleMindmap.id, parentId: null, depth: 0 })
-    const methods = events.find((event) => event.id === 'methods')
-    expect(methods.parentId).toBe(sampleMindmap.id)
-    expect(methods.depth).toBe(1)
-    const vector = events.find((event) => event.id === 'methods-vector')
-    expect(vector.parentId).toBe('methods-search')
-    expect(vector.depth).toBe(3)
+    const branch = events.find((event) => event.id === 'branch-1')
+    expect(branch.parentId).toBe(sampleMindmap.id)
+    expect(branch.depth).toBe(1)
+    const lastBranch = events.find((event) => event.id === 'branch-4')
+    expect(lastBranch.parentId).toBe(sampleMindmap.id)
+    expect(lastBranch.depth).toBe(1)
   })
 
   it('بسته‌ها همه رویدادها را دقیقاً یک‌بار پوشش می‌دهند و ریشه اول است', () => {

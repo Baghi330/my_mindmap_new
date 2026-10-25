@@ -31,7 +31,7 @@ import { createHistoryStore } from '../core/history.js'
 import { createNodeMeasurer } from '../core/measure.js'
 import { layoutMindmap } from '../core/layout.js'
 import { getTheme } from '../theme/palettes.js'
-import { blankMindmap } from '../data/sampleMindmap.js'
+import { blankMindmap, defaultMindmap } from '../data/sampleMindmap.js'
 import { StreamAbortedError, streamSampleMindmap } from '../services/mindmapStream.js'
 import { normalizePersianText, toPersianDigits } from '../utils/text.js'
 import { useGrowthEngine } from './useGrowthEngine.js'
@@ -102,6 +102,18 @@ function readStoredPreferences() {
   return sanitizePreferences(readJsonStorage(SETTINGS_KEY))
 }
 
+/**
+ * حذف نقشهٔ ذخیره‌شده تا پس از رفرش، دادهٔ قدیمی روی نقشهٔ پیش‌فرض ننشیند.
+ * فقط سند نقشه پاک می‌شود؛ تنظیمات کاربر دست‌نخورده می‌ماند.
+ */
+export function clearStoredDocument() {
+  try {
+    localStorage.removeItem(DOCUMENT_KEY)
+  } catch {
+    // اگر مرورگر اجازهٔ دسترسی نداد، کاری نمی‌شود کرد.
+  }
+}
+
 function createStore() {
   const growthEngine = useGrowthEngine()
   const toast = useToast()
@@ -113,8 +125,11 @@ function createStore() {
   const storedPreferences = readStoredPreferences()
 
   const preferences = reactive({ ...storedPreferences })
-  // بدون دادهٔ تستی: تا وقتی داده‌ای از پراپ یا ذخیره‌سازی نیاید، فقط ریشه خالی است.
-  const tree = ref(storedDocument?.tree ?? cloneTree(blankMindmap))
+  // در اپ میزبان، نقشهٔ ذخیره‌شده (ویرایش‌های کاربر) ادامه پیدا می‌کند؛
+  // در غیر این صورت نقشهٔ پیش‌فرض (ریشه + چهار شاخه) نمایش داده می‌شود.
+  const tree = ref(storedDocument?.tree ?? cloneTree(defaultMindmap))
+
+
   const treeRevision = ref(0)
   const selectedId = ref(tree.value.id)
   const editingId = ref(null)
@@ -189,6 +204,18 @@ function createStore() {
   const rootLabel = computed(() => tree.value?.label || 'مایندمپ')
 
   /* ------------------------------- ذخیره‌سازی ------------------------------- */
+
+  /**
+   * هر بار کد تازه بارگذاری شود (نسخه جدید/ریفرش کامل) سند ذخیره‌شده دور ریخته
+   * می‌شود تا دادهٔ قدیمی به‌جای نقشهٔ پیش‌فرض نشان داده نشود. ویرایش‌های
+   * همان نشست با ذخیرهٔ خودکار حفظ می‌شوند.
+   */
+  if (storedDocument && typeof window !== 'undefined') {
+    clearStoredDocument()
+    tree.value = cloneTree(defaultMindmap)
+    selectedId.value = tree.value.id
+    savedAt.value = null
+  }
 
   let saveTimer = 0
 
@@ -930,7 +957,12 @@ function createStore() {
 
   function toggleAutoSave() {
     preferences.autoSave = !preferences.autoSave
-    if (preferences.autoSave) saveDocumentNow()
+    if (preferences.autoSave) {
+      saveDocumentNow()
+    } else {
+      // در حالت خواندنی نباید سند قدیمی باقی بماند و با رفرش برگردد.
+      clearStoredDocument()
+    }
   }
 
   /* ------------------------------ صفحه‌کلید ------------------------------ */

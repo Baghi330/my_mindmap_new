@@ -11,9 +11,10 @@ import App from "./App.vue";
  *   createApp(App, { data }).mount('#app')
  *
  * ساختار: { id, label, note?, collapsed?, children: [...] } یا { root }
- * تا وقتی داده‌ای نرسد، نقشه خالی و فقط با گره مرکزی نمایش داده می‌شود.
+ * تا وقتی داده‌ای نرسد، نقشهٔ پیش‌فرض (ریشه + چهار شاخه) نمایش داده می‌شود.
+ * هیچ دادهٔ آزمایشی همراه بسته منتشر نمی‌شود.
  */
-const projectData = window.__MINDMAP_DATA__ ?? null;
+const projectData = null;
 
 /**
  * فونت فارسی پیش از ساخت برنامه بارگذاری می‌شود تا اندازه‌گیری متن

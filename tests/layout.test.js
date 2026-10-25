@@ -104,14 +104,17 @@ describe('چیدمان درخت', () => {
 
   it('گره جمع‌شده زیرشاخه‌ها را از چیدمان حذف می‌کند', () => {
     const tree = JSON.parse(JSON.stringify(sampleMindmap))
+    tree.children[0].children.push(
+      { id: 'branch-1-a', label: 'زیرشاخه', children: [] },
+    )
     tree.children[0].collapsed = true
     const layout = createLayout(tree, 'balanced')
     const collapsedNode = layout.nodeMap.get(tree.children[0].id)
 
     expect(collapsedNode).toBeTruthy()
     expect(collapsedNode.collapsed).toBe(true)
-    expect(collapsedNode.hiddenCount).toBe(countNodes(tree.children[0]) - 1)
-    expect(layout.nodes.some((node) => node.id === 'methods-data')).toBe(false)
+    expect(collapsedNode.hiddenCount).toBe(1)
+    expect(layout.nodes.some((node) => node.id === 'branch-1-a')).toBe(false)
     expect(findOverlappingNodePairs(layout)).toEqual([])
   })
 
@@ -119,7 +122,7 @@ describe('چیدمان درخت', () => {
     const layout = createLayout(sampleMindmap, 'balanced')
     expect(layout.edges).toHaveLength(layout.nodeCount - 1)
 
-    const edge = layout.edges.find((item) => item.id === 'methods')
+    const edge = layout.edges.find((item) => item.id === 'branch-1')
     const parent = layout.nodeMap.get(edge.parentId)
     const child = layout.nodeMap.get(edge.id)
     expect(edge.startX).toBeCloseTo(parent.x - parent.width / 2)
@@ -132,11 +135,10 @@ describe('چیدمان درخت', () => {
   it('شناسه، عنوان و اطلاعات شاخه را در خروجی نگه می‌دارد', () => {
     const layout = createLayout(sampleMindmap, 'balanced')
     const nodes = new Map(layout.nodes.map((node) => [node.id, node]))
-    expect(nodes.get('methods').label).toBe('روش‌های نوین پژوهش')
-    expect(nodes.get('methods').branchIndex).toBe(0)
-    expect(nodes.get('tools').branchIndex).toBe(1)
-    expect(nodes.get('methods-vector').branchIndex).toBe(0)
-    expect(nodes.get('methods-vector').parentId).toBe('methods-search')
+    expect(nodes.get('branch-1').label).toBe('شاخه ۱')
+    expect(nodes.get('branch-1').branchIndex).toBe(0)
+    expect(nodes.get('branch-2').branchIndex).toBe(1)
+    expect(nodes.get('branch-4').parentId).toBe('root')
   })
 
   it('همه گره‌های چیدمان در پیمایش درخت حاضرند', () => {

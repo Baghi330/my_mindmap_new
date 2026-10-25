@@ -1,84 +1,49 @@
 <script setup>
-import { computed } from 'vue'
-import { useGrowthEngine } from '../composables/useGrowthEngine.js'
-import { useMindmapStore } from '../composables/useMindmapStore.js'
-import { toPersianDigits } from '../utils/text.js'
-import UiIcon from './UiIcon.vue'
+import { computed } from "vue";
+import { useGrowthEngine } from "../composables/useGrowthEngine.js";
+import { useMindmapStore } from "../composables/useMindmapStore.js";
+import { toPersianDigits } from "../utils/text.js";
 
-const store = useMindmapStore()
-const growthEngine = useGrowthEngine()
+const store = useMindmapStore();
+const growthEngine = useGrowthEngine();
 
-const total = computed(() => growthEngine.totalCount.value)
-const drawn = computed(() => growthEngine.drawnCount.value)
-const isPlaying = computed(() => growthEngine.isPlaying.value)
-const isComplete = computed(() => growthEngine.isComplete.value)
-const isStreaming = computed(() => store.isStreaming.value)
-const visible = computed(() => store.nodeCount.value > 1 || isStreaming.value)
+const total = computed(() => growthEngine.totalCount.value);
+const drawn = computed(() => growthEngine.drawnCount.value);
+const isPlaying = computed(() => growthEngine.isPlaying.value);
+const isComplete = computed(() => growthEngine.isComplete.value);
+const isStreaming = computed(() => store.isStreaming.value);
+const visible = computed(() => store.nodeCount.value > 1 || isStreaming.value);
 const percent = computed(() => {
-  if (total.value === 0) return 100
-  return Math.round((drawn.value / total.value) * 100)
-})
+  if (total.value === 0) return 100;
+  return Math.round((drawn.value / total.value) * 100);
+});
 
 const statusText = computed(() => {
   if (isStreaming.value) {
-    if (isPlaying.value) return 'هوش مصنوعی در حال نوشتن مایندمپ است'
-    if (isComplete.value) return 'داده دریافت شد؛ نمایش متوقف است'
-    return 'دریافت داده ادامه دارد؛ نمایش متوقف است'
+    if (isPlaying.value) return "هوش مصنوعی در حال نوشتن مایندمپ است";
+    return "داده دریافت شد؛ نمایش متوقف است";
   }
-  if (!isComplete.value) return 'رشد شاخه‌ها در جریان است'
-  return 'مایندمپ کامل شد'
-})
+  if (!isComplete.value) return "رشد شاخه‌ها در جریان است";
+  return "مایندمپ کامل شد";
+});
 
 const countText = computed(
-  () => `${toPersianDigits(drawn.value)} از ${toPersianDigits(total.value)} گره`,
-)
-
-const speedOptions = [0.75, 1, 1.5, 2, 3]
-const speedLabel = computed(() => {
-  const value = store.preferences.growthSpeed
-  const formatted = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, '')
-  return `×${toPersianDigits(formatted)}`
-})
-
-function cycleSpeed() {
-  const current = store.preferences.growthSpeed
-  const index = speedOptions.findIndex((option) => Math.abs(option - current) < 0.001)
-  const next = speedOptions[(index + 1) % speedOptions.length]
-  store.setGrowthSpeed(next)
-}
-
-function handlePlayback() {
-  if (isPlaying.value) {
-    growthEngine.pause()
-  } else if (isComplete.value) {
-    store.replayAnimation()
-  } else {
-    growthEngine.play()
-  }
-}
-
-function skipAnimation() {
-  store.skipAnimation()
-}
+  () =>
+    `${toPersianDigits(drawn.value)} از ${toPersianDigits(total.value)} گره`,
+);
 </script>
 
 <template>
   <Transition name="growth-bar">
     <div v-if="visible" class="growth-bar" role="status" aria-live="polite">
-      <button
-        type="button"
-        class="playback-button"
-        :title="isPlaying ? 'توقف نمایش' : isComplete ? 'پخش مجدد رشد' : 'ادامه نمایش'"
-        :aria-label="isPlaying ? 'توقف نمایش' : isComplete ? 'پخش مجدد رشد' : 'ادامه نمایش'"
-        @click="handlePlayback"
-      >
-        <UiIcon :name="isPlaying ? 'pause' : isComplete ? 'replay' : 'play'" :size="17" />
-      </button>
-
       <div class="growth-info">
         <div class="growth-status">
           <span class="status-text">{{ statusText }}</span>
-          <span v-if="isStreaming && isPlaying" class="typing-dots" aria-hidden="true">
+          <span
+            v-if="isStreaming && isPlaying"
+            class="typing-dots"
+            aria-hidden="true"
+          >
             <i></i><i></i><i></i>
           </span>
           <span class="growth-count">{{ countText }}</span>
@@ -87,28 +52,6 @@ function skipAnimation() {
           <span class="growth-fill" :style="{ width: `${percent}%` }"></span>
           <span v-if="isPlaying || isStreaming" class="growth-shimmer"></span>
         </div>
-      </div>
-
-      <div class="growth-actions">
-        <button
-          v-if="!isComplete"
-          type="button"
-          class="growth-action"
-          title="نمایش کامل و رد کردن انیمیشن"
-          aria-label="نمایش کامل و رد کردن انیمیشن"
-          @click="skipAnimation"
-        >
-          <UiIcon name="skip" :size="16" />
-        </button>
-        <button
-          type="button"
-          class="growth-speed"
-          :title="`سرعت نمایش: ${speedLabel} (برای تغییر کلیک کنید)`"
-          aria-label="تغییر سرعت نمایش"
-          @click="cycleSpeed"
-        >
-          {{ speedLabel }}
-        </button>
       </div>
     </div>
   </Transition>
@@ -132,29 +75,6 @@ function skipAnimation() {
   background: var(--panel-bg);
   box-shadow: 0 20px 50px -26px var(--shadow);
   backdrop-filter: blur(20px);
-}
-
-.playback-button {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  flex: none;
-  color: var(--accent-text);
-  background: var(--accent);
-  box-shadow: 0 8px 18px -10px var(--accent);
-  transition:
-    background-color 160ms ease,
-    transform 120ms ease;
-}
-
-.playback-button:hover {
-  background: var(--accent-hover);
-}
-
-.playback-button:active {
-  transform: scale(0.96);
 }
 
 .growth-info {
@@ -253,49 +173,6 @@ function skipAnimation() {
   }
 }
 
-.growth-actions {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: none;
-}
-
-.growth-action {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.growth-action:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.growth-speed {
-  height: 26px;
-  padding: 0 7px;
-  border-radius: 7px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  transition:
-    color 150ms ease,
-    border-color 150ms ease;
-}
-
-.growth-speed:hover {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-}
-
 .growth-bar-enter-active,
 .growth-bar-leave-active {
   transition:
@@ -318,21 +195,12 @@ function skipAnimation() {
     min-height: 52px;
   }
 
-  .playback-button {
-    width: 36px;
-    height: 36px;
-  }
-
   .growth-count {
     display: none;
   }
 
   .status-text {
     font-size: 11px;
-  }
-
-  .growth-speed {
-    display: none;
   }
 }
 </style>
